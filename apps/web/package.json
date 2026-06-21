@@ -7,6 +7,7 @@
     "dev": "PORT=5173 BASE_PATH=/ vite --config vite.config.ts --host 0.0.0.0",
     "build": "BASE_PATH=/ vite build --config vite.config.ts",
     "serve": "PORT=5173 BASE_PATH=/ vite preview --config vite.config.ts --host 0.0.0.0",
+    "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
@@ -15,9 +16,13 @@
     "@replit/vite-plugin-runtime-error-modal": "catalog:",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "catalog:",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.1.0",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.9",
     "@vitejs/plugin-react": "catalog:",
     "tailwindcss": "catalog:",
     "vite": "catalog:"

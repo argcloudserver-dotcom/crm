@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authLog } from "../lib/authLog";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -7,11 +8,11 @@ export function useCsrfToken() {
 
   useEffect(() => {
     const url = `${BASE_URL}/api/csrf-token`;
-    console.log("[CSRF] Fetching token from:", url);
+    authLog.info("[CSRF] Fetching token from:", url);
 
     fetch(url, { credentials: "include" })
       .then((res) => {
-        console.log("[CSRF] Response status:", res.status);
+        authLog.info("[CSRF] Response status:", res.status);
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
@@ -21,14 +22,13 @@ export function useCsrfToken() {
         if (!data?.csrfToken) {
           throw new Error("No CSRF token in response");
         }
-        console.log("[CSRF] Token received: ✓");
+        authLog.info("[CSRF] Token received: ✓");
         setCsrfToken(data.csrfToken);
       })
       .catch((err) => {
-        console.error("[CSRF] Fetch failed:", err);
+        authLog.error("[CSRF] Fetch failed:", err);
       });
   }, []);
 
   return csrfToken;
 }
-

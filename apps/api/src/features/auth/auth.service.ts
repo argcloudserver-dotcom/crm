@@ -38,6 +38,27 @@ export async function listTeamLeaders() {
   }
 }
 
+export type ApprovalStatusResult =
+  | { found: true; status: string; emailVerified: boolean }
+  | { found: false };
+
+/**
+ * Lightweight, unauthenticated status probe used by the "pending approval"
+ * screen to poll whether an admin has approved the account yet. Returns only
+ * non-sensitive status fields.
+ */
+export async function getApprovalStatus(
+  email: string,
+): Promise<ApprovalStatusResult> {
+  const user = await repo.findByEmail(email);
+  if (!user) return { found: false };
+  return {
+    found: true,
+    status: user.status,
+    emailVerified: !!user.emailVerifiedAt,
+  };
+}
+
 export async function register(input: RegisterInput): Promise<RegisterResult> {
   // AUDIT FIX (v8): the public `registerBody` schema is `.strict()` and does
   // NOT expose `role` / `teamLeaderId` (anti-privilege-escalation). The old
@@ -99,13 +120,19 @@ export async function verifyEmail(
   if (!user) return { ok: false, reason: "Invalid code" };
   if (user.emailVerifiedAt) return { ok: true, alreadyVerified: true };
 
-  if (
-    !user.verifyToken ||
-    user.verifyToken !== input.code ||
-    !user.verifyTokenExpires ||
-    user.verifyTokenExpires < new Date()
-  ) {
-    return { ok: false, reason: "Invalid or expired verification code" };
+  // Distinguish "expired" from "wrong code" so the UI can show a specific
+  // message and prompt the user to request a fresh code.
+  if (user.verifyTokenExpires && user.verifyTokenExpires < new Date()) {
+    return {
+      ok: false,
+      reason: "Your verification code has expired. Please request a new code.",
+    };
+  }
+  if (!user.verifyToken || user.verifyToken !== input.code) {
+    return {
+      ok: false,
+      reason: "That verification code is invalid. Please check the code and try again.",
+    };
   }
 
   await repo.updateUser(user.id, {

@@ -16,7 +16,17 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { data: currentUser, isLoading, refetch, error } = useGetMe();
+  // The /api/auth/me probe now returns 200 with a null user when there is no
+  // active session (instead of 401), so this query no longer errors or retries
+  // noisily on app start. A null `currentUser` simply means "not logged in".
+  const { data: currentUser, isLoading, refetch, error } = useGetMe({
+    query: {
+      queryKey: ["/api/auth/me"],
+      staleTime: 30_000,
+      retry: false,
+    },
+  });
+
 
   const [_, setLocation] = useLocation();
 

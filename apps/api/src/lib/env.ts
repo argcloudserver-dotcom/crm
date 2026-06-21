@@ -35,6 +35,15 @@ const EnvSchema = z.object({
     .transform((s) => s.split(",").map((o) => o.trim()).filter(Boolean)),
   COOKIE_DOMAIN: z.string().optional(),
 
+  // Auth diagnostics logging (#4). When unset, logging is on in production and
+  // off in development so local consoles stay clean. Accepts true/false/1/0.
+  AUTH_LOG_ENABLED: z
+    .enum(["true", "false", "1", "0"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true" || v === "1")),
+
+
+
   // Public-facing URLs
   PUBLIC_APP_URL: z.string().url(),
 

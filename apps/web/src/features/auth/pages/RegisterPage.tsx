@@ -26,7 +26,7 @@ const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 const RESEND_COOLDOWN = 60;
 const ease = [0.22, 1, 0.36, 1] as const;
 
-function useResendCountdown() {
+export function useResendCountdown() {
   const [seconds, setSeconds] = useState(RESEND_COOLDOWN);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const start = useCallback(() => {
@@ -86,14 +86,51 @@ function ErrorMsg({ msg }: { msg?: string }) {
 }
 
 /* ── Verify stage ── */
-function VerifyStage({ registeredEmail, onBack }: { registeredEmail: string; onBack: () => void }) {
+const MAX_VERIFY_ATTEMPTS = 5;
+const LOCKOUT_SECONDS = 30;
+
+// Visually-hidden style for screen-reader-only status announcements.
+const srOnly: React.CSSProperties = {
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  padding: 0,
+  margin: "-1px",
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
+export function VerifyStage({ registeredEmail, onBack, onVerified }: { registeredEmail: string; onBack: () => void; onVerified: () => void }) {
   const p = useAuthPalette();
   const verifyEmail = useVerifyEmail();
   const [error, setError] = useState<string | null>(null);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [lockRemaining, setLockRemaining] = useState(0);
+  // Screen-reader live announcements (resend loading + verification results).
+  const [statusMsg, setStatusMsg] = useState("");
   const { seconds, start: startCountdown, canResend } = useResendCountdown();
+
+  const remainingAttempts = Math.max(0, MAX_VERIFY_ATTEMPTS - attempts);
+  const isLocked = lockRemaining > 0;
+
+  // Kick off the resend cooldown as soon as the verify screen appears.
+  useEffect(() => {
+    startCountdown();
+  }, [startCountdown]);
+
+  // Lockout countdown after repeated failures.
+  useEffect(() => {
+    if (lockRemaining <= 0) return;
+    const id = setInterval(() => {
+      setLockRemaining((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lockRemaining]);
 
   const form = useForm<VerifyFormValues>({
     resolver: zodResolver(verifySchema),
@@ -101,33 +138,71 @@ function VerifyStage({ registeredEmail, onBack }: { registeredEmail: string; onB
   });
 
   const onVerify = (data: VerifyFormValues) => {
+    if (isLocked) return;
     setError(null);
+    setStatusMsg("Verifying your code…");
     verifyEmail.mutate(
       { data: { email: registeredEmail, code: data.code } },
       {
-        onSuccess: () => {},
-        onError: (err) => setError((err as any)?.message || "Invalid or expired code."),
+        onSuccess: () => {
+          setStatusMsg("Email verified. Redirecting to approval status.");
+          onVerified();
+        },
+        onError: (err) => {
+          const baseMsg = (err as any)?.message || "That verification code is invalid or has expired.";
+          const nextAttempts = attempts + 1;
+          setAttempts(nextAttempts);
+          const left = Math.max(0, MAX_VERIFY_ATTEMPTS - nextAttempts);
+          if (nextAttempts >= MAX_VERIFY_ATTEMPTS) {
+            setLockRemaining(LOCKOUT_SECONDS);
+            const lockMsg = `${baseMsg} Too many failed attempts — verification is paused for ${LOCKOUT_SECONDS} seconds.`;
+            setError(lockMsg);
+            setStatusMsg(lockMsg);
+          } else {
+            const withCount = `${baseMsg} ${left} attempt${left === 1 ? "" : "s"} remaining.`;
+            setError(withCount);
+            setStatusMsg(withCount);
+          }
+        },
       }
     );
   };
 
+
   async function handleResend() {
     setResendMsg(null); setError(null); setIsResending(true);
+    setStatusMsg("Sending a new verification code…");
     try {
       const res = await apiFetch("/api/auth/resend-verification", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: registeredEmail }),
       });
-      if (!res.ok) throw new Error(((await res.json()) as any).error ?? "Failed to resend");
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as any;
+        // Surface the server cooldown message (e.g. rate limit) when present.
+        throw new Error(body?.error?.message ?? body?.error ?? "Failed to resend");
+      }
       setResendMsg("A new code has been sent to your email.");
+      setStatusMsg("A new verification code has been sent to your email.");
+      // A fresh code resets the failed-attempt lockout.
+      setAttempts(0);
+      setLockRemaining(0);
       startCountdown();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to resend code");
+      const msg = err instanceof Error ? err.message : "Failed to resend code";
+      setError(msg);
+      setStatusMsg(msg);
     } finally { setIsResending(false); }
   }
 
+  const verifyDisabled = verifyEmail.isPending || isLocked;
+
   return (
     <AuthShell maxWidth={420}>
+      {/* Screen-reader live region: announces loading + results politely. */}
+      <div aria-live="polite" role="status" style={srOnly}>
+        {statusMsg}
+      </div>
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease }}
         style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "24px" }}
       >
@@ -147,7 +222,7 @@ function VerifyStage({ registeredEmail, onBack }: { registeredEmail: string; onB
 
       <form onSubmit={form.handleSubmit(onVerify)}>
         {error && (
-          <div style={{ marginBottom: "16px", padding: "10px 14px", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: "8px", fontSize: "13px", color: "#F87171" }}>
+          <div role="alert" style={{ marginBottom: "16px", padding: "10px 14px", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: "8px", fontSize: "13px", color: "#F87171" }}>
             {error}
           </div>
         )}
@@ -158,11 +233,14 @@ function VerifyStage({ registeredEmail, onBack }: { registeredEmail: string; onB
         )}
 
         <div style={{ marginBottom: "32px" }}>
-          <label style={{ display: "block", fontSize: "10px", fontWeight: 600, color: focused ? "#c8a84b" : p.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "10px", transition: "color 0.2s" }}>
+          <label htmlFor="verify-code" style={{ display: "block", fontSize: "10px", fontWeight: 600, color: focused ? "#c8a84b" : p.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "10px", transition: "color 0.2s" }}>
             Verification code
           </label>
           <input
+            id="verify-code"
             inputMode="numeric" maxLength={6} placeholder="0 0 0 0 0 0"
+            aria-invalid={!!error}
+            disabled={isLocked}
             {...form.register("code")}
             onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
             style={{
@@ -174,28 +252,40 @@ function VerifyStage({ registeredEmail, onBack }: { registeredEmail: string; onB
               letterSpacing: "0.4em", textAlign: "center",
               outline: "none", transition: "border-color 0.2s, color 0.3s",
               fontFamily: "ui-monospace, monospace",
+              opacity: isLocked ? 0.5 : 1,
             }}
           />
           <ErrorMsg msg={form.formState.errors.code?.message} />
+          {!error && attempts > 0 && !isLocked && (
+            <p style={{ fontSize: "11px", color: p.muted, marginTop: "6px" }}>
+              {remainingAttempts} attempt{remainingAttempts === 1 ? "" : "s"} remaining.
+            </p>
+          )}
+          {isLocked && (
+            <p style={{ fontSize: "11px", color: "#F87171", marginTop: "6px" }}>
+              Verification paused. Try again in{" "}
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{lockRemaining}s</span> or request a new code.
+            </p>
+          )}
         </div>
 
         <motion.button
-          type="submit" disabled={verifyEmail.isPending}
-          whileHover={{ scale: verifyEmail.isPending ? 1 : 1.015, backgroundColor: "rgba(200,168,75,0.08)" }}
-          whileTap={{ scale: verifyEmail.isPending ? 1 : 0.98 }}
+          type="submit" disabled={verifyDisabled}
+          whileHover={{ scale: verifyDisabled ? 1 : 1.015, backgroundColor: "rgba(200,168,75,0.08)" }}
+          whileTap={{ scale: verifyDisabled ? 1 : 0.98 }}
           transition={{ duration: 0.15 }}
           style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             width: "100%", background: "transparent",
             border: "1px solid #c8a84b", borderRadius: "4px", padding: "13px 20px",
-            color: verifyEmail.isPending ? "rgba(200,168,75,0.5)" : "#c8a84b",
+            color: verifyDisabled ? "rgba(200,168,75,0.5)" : "#c8a84b",
             fontSize: "12px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase",
-            cursor: verifyEmail.isPending ? "not-allowed" : "pointer", marginBottom: "20px",
+            cursor: verifyDisabled ? "not-allowed" : "pointer", marginBottom: "20px",
           }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {verifyEmail.isPending && <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />}
-            Verify email
+            {isLocked ? `Locked (${lockRemaining}s)` : "Verify email"}
           </span>
           <ArrowRight style={{ width: 15, height: 15 }} />
         </motion.button>
@@ -205,10 +295,10 @@ function VerifyStage({ registeredEmail, onBack }: { registeredEmail: string; onB
         <button type="button" onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12.5px", color: p.backLink, padding: 0, transition: "color 0.3s" }}>
           Back to registration
         </button>
-        {canResend ? (
-          <button type="button" onClick={handleResend} disabled={isResending} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12.5px", color: "#c8a84b", display: "flex", alignItems: "center", gap: "5px", padding: 0 }}>
+        {canResend || error || isLocked ? (
+          <button type="button" onClick={handleResend} disabled={isResending} aria-label="Resend verification code" style={{ background: "none", border: "none", cursor: isResending ? "not-allowed" : "pointer", fontSize: "12.5px", color: isResending ? p.muted : "#c8a84b", display: "flex", alignItems: "center", gap: "5px", padding: 0 }}>
             {isResending && <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />}
-            Resend code
+            {isResending ? "Sending…" : (error || isLocked) ? "Request a new code" : "Resend code"}
           </button>
         ) : (
           <span style={{ fontSize: "12px", color: p.muted, transition: "color 0.3s" }}>
@@ -222,8 +312,51 @@ function VerifyStage({ registeredEmail, onBack }: { registeredEmail: string; onB
 }
 
 /* ── Pending stage ── */
-function PendingStage() {
+export function PendingStage({ registeredEmail }: { registeredEmail: string }) {
   const p = useAuthPalette();
+  const [approved, setApproved] = useState(false);
+
+  // Poll the public approval-status endpoint so the page reacts the moment an
+  // admin approves the account — no manual refresh required.
+  //
+  // The first check fires immediately, then subsequent checks use exponential
+  // backoff (5s → 10s → 20s … capped at 60s) to reduce load. Polling stops
+  // immediately once approval is detected so we never fire a duplicate request
+  // or a redundant state update.
+  useEffect(() => {
+    if (!registeredEmail || approved) return;
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let delay = 5000;
+    const MAX_DELAY = 60000;
+
+    const check = async () => {
+      try {
+        const res = await apiFetch(
+          `/api/auth/approval-status?email=${encodeURIComponent(registeredEmail)}`,
+        );
+        if (cancelled) return;
+        if (res.ok) {
+          const body = (await res.json()) as { data?: { status?: string } };
+          if (body?.data?.status === "active") {
+            setApproved(true); // effect re-runs; cleanup stops the loop
+            return;
+          }
+        }
+      } catch {
+        /* transient network errors are ignored; we keep polling */
+      }
+      if (cancelled) return;
+      timeoutId = setTimeout(check, delay);
+      delay = Math.min(delay * 2, MAX_DELAY);
+    };
+
+    void check();
+    return () => { cancelled = true; clearTimeout(timeoutId); };
+  }, [registeredEmail, approved]);
+
+
+
   return (
     <AuthShell maxWidth={400}>
       <div style={{ textAlign: "center" }}>
@@ -232,22 +365,33 @@ function PendingStage() {
         >
           <CheckCircle2 style={{ width: 24, height: 24, color: "#4ADE80" }} />
         </motion.div>
-        <h2 style={{ fontSize: "22px", fontWeight: 700, color: p.heading, marginBottom: "12px", transition: "color 0.3s" }}>Email verified!</h2>
+        <h2 style={{ fontSize: "22px", fontWeight: 700, color: p.heading, marginBottom: "12px", transition: "color 0.3s" }}>
+          {approved ? "You're approved!" : "Email verified!"}
+        </h2>
         <p style={{ fontSize: "14px", color: p.body, lineHeight: 1.7, marginBottom: "32px", transition: "color 0.3s" }}>
-          Your account is now pending administrator approval. You'll receive an email once approved.
+          {approved
+            ? "An administrator has approved your account. You can now sign in."
+            : "Your account is now pending administrator approval. This page will update automatically once you're approved."}
         </p>
+        {!approved && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "28px", fontSize: "12px", color: p.muted }}>
+            <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} />
+            Waiting for approval…
+          </div>
+        )}
         <Link
           href="/login"
           style={{
             display: "inline-flex", alignItems: "center", gap: "8px",
-            border: "1px solid rgba(200,168,75,0.3)", borderRadius: "4px",
+            border: `1px solid ${approved ? "#c8a84b" : "rgba(200,168,75,0.3)"}`, borderRadius: "4px",
             padding: "11px 20px", color: "#c8a84b", textDecoration: "none",
             fontSize: "12px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase",
           }}
         >
-          Return to sign in <ArrowRight style={{ width: 14, height: 14 }} />
+          {approved ? "Sign in now" : "Return to sign in"} <ArrowRight style={{ width: 14, height: 14 }} />
         </Link>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </AuthShell>
   );
 }
@@ -294,8 +438,8 @@ export function RegisterPage() {
     );
   };
 
-  if (stage === "verify") return <VerifyStage registeredEmail={registeredEmail} onBack={() => { setStage("register"); setError(null); }} />;
-  if (stage === "pending") return <PendingStage />;
+  if (stage === "verify") return <VerifyStage registeredEmail={registeredEmail} onBack={() => { setStage("register"); setError(null); }} onVerified={() => setStage("pending")} />;
+  if (stage === "pending") return <PendingStage registeredEmail={registeredEmail} />;
 
   const f = (name: string) => focused === name;
   const err = (name: keyof RegisterFormValues) => !!form.formState.errors[name];

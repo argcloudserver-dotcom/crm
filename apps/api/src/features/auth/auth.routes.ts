@@ -1,12 +1,17 @@
 import { Router } from "express";
 import passport from "passport";
 import type { User } from "@workspace/db";
-import { requireAuth } from "../../shared/middlewares/requireAuth";
 import { asyncHandler } from "../../shared/utils/asyncHandler";
 import { created, fail, ok } from "../../shared/utils/response";
 import { validateBody } from "../../shared/utils/validate";
-import { getUserFromRequest } from "../../lib/auth/session";
+import {
+  getUserFromRequest,
+  setSessionCookie,
+  clearSessionCookie,
+  getTokenFromRequest,
+} from "../../lib/auth/session";
 import { sanitizeUser } from "../../lib/sanitize";
+import { authLog } from "../../lib/auth/auth-log";
 import { env } from "../../lib/env";
 import {
   forgotPasswordBody,
@@ -17,23 +22,20 @@ import {
   verifyEmailBody,
 } from "./auth.schemas";
 import * as service from "./auth.service";
+import { createRateLimiter } from "../../shared/middlewares/rateLimit";
 
 const router = Router();
 
-// FIX: Use __Host- prefix in production for enhanced cookie security
-const cookieBase = {
-  httpOnly: true,
-  secure: env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  path: "/",
-};
+// Throttle resend-verification: max 3 codes per email/IP per 10 minutes.
+// Prevents mailbox spam and bulk fake-account creation.
+const resendVerificationLimiter = createRateLimiter({
+  windowMs: 10 * 60_000,
+  max: 3,
+  prefix: "resend-verification",
+  message:
+    "Too many verification code requests. Please wait a few minutes before requesting another code.",
+});
 
-const sessionCookieName = env.NODE_ENV === "production" ? "__Host-session" : "session";
-
-const sessionCookieOptions = {
-  ...cookieBase,
-  maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-};
 
 // Team leaders are needed on the public registration page (so a "sales" user can
 // pick their team leader before an account exists). This must NOT require auth,
@@ -42,6 +44,20 @@ const sessionCookieOptions = {
 router.get(
   "/auth/team-leaders",
   asyncHandler(async (_req, res) => ok(res, await service.listTeamLeaders())),
+);
+
+// Public, unauthenticated approval-status probe for the "pending approval"
+// screen. Polled by the client so the page can react the moment an admin
+// approves the account. Returns only non-sensitive status fields.
+router.get(
+  "/auth/approval-status",
+  asyncHandler(async (req, res) => {
+    const email = typeof req.query["email"] === "string" ? req.query["email"] : "";
+    if (!email) {
+      return fail(res, 400, { code: "BAD_REQUEST", message: "email is required" });
+    }
+    return ok(res, await service.getApprovalStatus(email));
+  }),
 );
 
 router.post(
@@ -103,7 +119,8 @@ router.post(
     }
 
     // Web clients: set HttpOnly cookie and return user only
-    res.cookie(sessionCookieName, token, sessionCookieOptions);
+    setSessionCookie(res, token);
+    authLog.info("login.success", { userId: user.id });
     return ok(res, {
       user: sanitizeUser(user),
     });
@@ -113,20 +130,54 @@ router.post(
 router.post(
   "/auth/logout",
   asyncHandler(async (req, res) => {
-    const token = req.cookies?.[sessionCookieName] || req.headers.authorization?.replace("Bearer ", "");
+    const token = getTokenFromRequest(req);
     if (token) {
       await service.logout(token);
     }
-    res.clearCookie(sessionCookieName, { path: "/" });
+    clearSessionCookie(res);
     return ok(res, { success: true });
   }),
 );
 
+/**
+ * Session probe used by the SPA on every load to learn "who am I?".
+ *
+ * IMPORTANT: this endpoint intentionally returns 200 with `user: null` when
+ * there is no active session, instead of 401. An unauthenticated app start is
+ * the *expected* state on the login/register screens — returning 401 there
+ * produced a red error in the browser console and triggered react-query
+ * retries even though nothing was wrong. The frontend treats a null user as
+ * "not logged in" and redirects to /login.
+ *
+ * A valid session is transparently refreshed (sliding expiration) so active
+ * users stay logged in across refreshes.
+ */
 router.get(
   "/auth/me",
-  requireAuth,
-  asyncHandler(async (req, res) => ok(res, sanitizeUser(req.currentUser!))),
+  asyncHandler(async (req, res) => {
+    const user = await getUserFromRequest(req);
+
+    // No session, or the account is neither active nor pending -> anonymous.
+    // We return the bare user object (or null) to match the existing client
+    // contract: the SPA reads `currentUser` fields directly.
+    if (!user || (user.status !== "active" && user.status !== "pending")) {
+      return ok(res, null);
+    }
+
+    // Refresh the cookie (only for cookie-based web sessions) so the 30-day
+    // window slides forward for active users.
+    const cookieToken =
+      req.cookies?.["__Host-session"] ?? req.cookies?.["session"];
+    if (cookieToken) {
+      setSessionCookie(res, cookieToken);
+    }
+
+    return ok(res, sanitizeUser(user));
+  }),
 );
+
+
+
 
 router.post(
   "/auth/forgot-password",
@@ -161,6 +212,7 @@ router.post(
 
 router.post(
   "/auth/resend-verification",
+  resendVerificationLimiter,
   validateBody(resendVerificationBody),
   asyncHandler(async (req, res) => {
     const result = await service.resendVerification(req.body);
@@ -184,7 +236,7 @@ async function completeOAuthLogin(
   user: User,
 ): Promise<void> {
   const token = await service.startSessionForOAuthUser(user);
-  res.cookie(sessionCookieName, token, sessionCookieOptions);
+  setSessionCookie(res, token);
   
   // FIX: Use env variable for redirect URL
   const redirectUrl = env.PUBLIC_APP_URL || "/";
@@ -328,7 +380,7 @@ router.post(
     if (isMobile) {
       return ok(res, { user: sanitizeUser(user), token, accessToken: token });
     }
-    res.cookie(sessionCookieName, token, sessionCookieOptions);
+    setSessionCookie(res, token);
     return ok(res, { user: sanitizeUser(user) });
   }),
 );
