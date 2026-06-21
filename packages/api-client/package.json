@@ -1,0 +1,38 @@
+{
+  "name": "@workspace/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./zod": "./src/zod/index.ts",
+    "./zod/auth": "./src/zod/auth/index.ts",
+    "./zod/leads": "./src/zod/leads/index.ts",
+    "./zod/resale": "./src/zod/resale/index.ts",
+    "./zod/clients": "./src/zod/clients/index.ts",
+    "./zod/projects": "./src/zod/projects/index.ts",
+    "./zod/profile": "./src/zod/profile/index.ts",
+    "./hooks/auth": "./src/hooks/auth/index.ts",
+    "./hooks/leads": "./src/hooks/leads/index.ts",
+    "./hooks/reports": "./src/hooks/reports/index.ts",
+    "./hooks/resale": "./src/hooks/resale/index.ts",
+    "./hooks/clients": "./src/hooks/clients/index.ts",
+    "./hooks/employees": "./src/hooks/employees/index.ts",
+    "./hooks/planner": "./src/hooks/planner/index.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "catalog:",
+    "@workspace/core": "workspace:*",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "scripts": {
+    "codegen": "orval --config ./orval.config.ts && pnpm -w run typecheck:libs"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "orval": "^8.9.1"
+  }
+}

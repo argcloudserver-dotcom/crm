@@ -1,0 +1,18 @@
+{
+  "name": "@workspace/i18n",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.tsx",
+    "./locales/en": "./src/locales/en.json",
+    "./locales/ar": "./src/locales/ar.json"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:"
+  }
+}

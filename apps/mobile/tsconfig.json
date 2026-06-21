@@ -1,0 +1,45 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
+    "baseUrl": ".",
+    "strict": true,
+    "paths": {
+      "@/*": ["./*"],
+      "@workspace/api-client": ["../../packages/api-client/src/index.ts"],
+      "@workspace/api-client/zod": ["../../packages/api-client/src/zod/index.ts"],
+      "@workspace/api-client/zod/auth": ["../../packages/api-client/src/zod/auth/index.ts"],
+      "@workspace/api-client/hooks/auth": ["../../packages/api-client/src/hooks/auth/index.ts"],
+      "@workspace/api-client/hooks/leads": ["../../packages/api-client/src/hooks/leads/index.ts"],
+      "@workspace/api-client/zod/leads": ["../../packages/api-client/src/zod/leads/index.ts"],
+      "@workspace/api-client/hooks/clients": ["../../packages/api-client/src/hooks/clients/index.ts"],
+      "@workspace/api-client/hooks/employees": ["../../packages/api-client/src/hooks/employees/index.ts"],
+      "@workspace/api-client/hooks/planner": ["../../packages/api-client/src/hooks/planner/index.ts"],
+      "@workspace/api-client/hooks/resale": ["../../packages/api-client/src/hooks/resale/index.ts"],
+      "@workspace/api-client/hooks/reports": ["../../packages/api-client/src/hooks/reports/index.ts"],
+      "@workspace/shared": ["../../packages/shared/src/index.ts"],
+      "@workspace/shared/auth": ["../../packages/shared/src/auth/index.ts"],
+      "@workspace/shared/errors": ["../../packages/shared/src/errors/index.ts"],
+      "@workspace/shared/utils": ["../../packages/shared/src/utils/index.ts"],
+      "@workspace/core": ["../../packages/core/src/index.ts"],
+      "@workspace/ui": ["../../packages/ui/src/index.ts"],
+      "@workspace/ui/tokens": ["../../packages/ui/src/tokens/native.ts"],
+      "@workspace/i18n": ["../../packages/i18n/src/index.ts"],
+      "@workspace/i18n/react": ["../../packages/i18n/src/react.tsx"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ],
+  "references": [
+    { "path": "../../packages/api-client" },
+    { "path": "../../packages/ui" },
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/core" },
+    { "path": "../../packages/i18n" }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@workspace/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./utils": "./src/utils/index.ts",
+    "./validators": "./src/utils/validators.ts",
+    "./formatters": "./src/utils/formatters.ts",
+    "./auth": "./src/auth/index.ts",
+    "./errors": "./src/errors/index.ts"
+  },
+  "dependencies": {
+    "@workspace/core": "workspace:*",
+    "@workspace/api-client": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:"
+  }
+}
