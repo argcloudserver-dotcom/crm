@@ -91,6 +91,10 @@ function ProtectedPages() {
 }
 
 function Router() {
+  // CSRF must be initialized for ALL routes (including public auth pages like
+  // /verify-email and /register), not only inside ProtectedPages. Otherwise the
+  // CSRF token getter is never registered and mutating requests return 403.
+  useInitializeCsrf();
   const { currentUser, isLoading } = useAuth();
   const [location] = useLocation();
 

@@ -35,10 +35,12 @@ const sessionCookieOptions = {
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 };
 
-// FIX: Team leaders endpoint should require authentication
+// Team leaders are needed on the public registration page (so a "sales" user can
+// pick their team leader before an account exists). This must NOT require auth,
+// otherwise registration breaks with a 401. Only non-sensitive fields are
+// returned by service.listTeamLeaders().
 router.get(
   "/auth/team-leaders",
-  requireAuth,
   asyncHandler(async (_req, res) => ok(res, await service.listTeamLeaders())),
 );
 
