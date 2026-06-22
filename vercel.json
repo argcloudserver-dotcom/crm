@@ -1,11 +1,8 @@
 {
-  "version": 2,
-  "framework": null,
+  "buildCommand": "pnpm --filter @workspace/web build && pnpm --filter @workspace/api build:serverless && echo 'Copy static files' && cp -r apps/web/dist/public/* .",
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "buildCommand": "pnpm --filter @workspace/web build && pnpm --filter @workspace/api build:serverless",
-  "outputDirectory": "apps/web/dist/public",
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api", "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"] },
+    { "src": "/api/(.*)", "dest": "/api" },
     { "src": "/(.*)", "dest": "/index.html", "status": 200 }
   ]
 }
