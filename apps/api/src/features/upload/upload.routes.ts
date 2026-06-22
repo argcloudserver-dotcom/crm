@@ -51,7 +51,7 @@ router.post("/upload", requireAuth, (req, res, next) => {
         });
       }
 
-      const result = await storeImage(r.file.buffer);
+      const result = await storeImage(r.file.buffer, detected.mime);
       return ok(s, result);
     })(req, res, next);
   });

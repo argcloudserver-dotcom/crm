@@ -1,6 +1,9 @@
 {
-  "version": 2,
-  "buildCommand": "pnpm install && pnpm run build",
-  "installCommand": "pnpm install",
-  "outputDirectory": "apps/web/dist/public"
+  "framework": null,
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "buildCommand": "pnpm --filter @workspace/web build && pnpm --filter @workspace/api build:serverless",
+  "outputDirectory": "apps/web/dist/public",
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }

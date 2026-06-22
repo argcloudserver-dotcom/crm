@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import path from "path";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -121,22 +120,11 @@ app.use((req, res, next) => {
 
 app.use("/api", buildApiRouter());
 
-// AUDIT FIX (v8): every upload landed in apps/api/public/uploads and the API
-// returned `/uploads/<file>.webp` as the URL, but nothing served that path —
-// so every uploaded image (avatars, project covers, resale photos) 404'd in
-// the browser. Serve the directory statically.
-const uploadsDir = path.join(process.cwd(), "public", "uploads");
-app.use(
-  "/uploads",
-  express.static(uploadsDir, {
-    fallthrough: false,
-    maxAge: "30d",
-    setHeaders: (res) => {
-      // Allow cross-origin <img> embedding (helmet default is "same-site").
-      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-    },
-  }),
-);
+// NOTE: Uploaded images are now stored in Vercel Blob (see
+// features/upload/upload.service.ts) and referenced by absolute CDN URLs, so
+// the API no longer serves a local `/uploads` directory. This is required for
+// the stateless serverless runtime, whose filesystem is ephemeral and
+// read-only outside of /tmp.
 
 // 404 for unmatched routes, then centralized error handler.
 app.use(notFoundHandler);
