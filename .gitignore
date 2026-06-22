@@ -57,3 +57,4 @@ apps/*/.env.local
 packages/*/.env
 packages/*/.env.local
 !**/.env.example
+.vercel
