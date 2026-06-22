@@ -22,6 +22,8 @@ const PERMISSION_ALIASES: Record<string, string> = {
   "resale.manage": "resale.edit",
 };
 
+const ACTIVE_USER_READ_FALLBACK = new Set(["employees.view", "clients.view"]);
+
 function canonicalKey(key: string): string {
   return PERMISSION_ALIASES[key] ?? key;
 }
@@ -91,7 +93,9 @@ export async function resolvePermission(
         )
       )
       .limit(1);
-    result = rp?.isEnabled ?? DEFAULT_ROLE_PERMISSIONS[role]?.[permissionKey] ?? false;
+    result = ACTIVE_USER_READ_FALLBACK.has(permissionKey)
+      ? true
+      : rp?.isEnabled ?? DEFAULT_ROLE_PERMISSIONS[role]?.[permissionKey] ?? false;
   }
 
   memCache.set(cacheKey, { value: result, expires: Date.now() + CACHE_TTL_MS });
