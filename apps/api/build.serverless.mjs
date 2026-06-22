@@ -25,7 +25,13 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
  */
 async function buildServerless() {
   const distDir = path.resolve(artifactDir, "../../api");
-  await rm(distDir, { recursive: true, force: true });
+  // Clean up bundled artifacts but preserve index.js (the function wrapper)
+  const builtFiles = await import("node:fs").then(fs => fs.promises.readdir(distDir, { withFileTypes: true }));
+  for (const file of builtFiles) {
+    if (file.name !== "index.js") {
+      await rm(path.join(distDir, file.name), { recursive: true, force: true });
+    }
+  }
 
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/vercel-handler.ts")],
