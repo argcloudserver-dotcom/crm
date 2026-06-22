@@ -11,6 +11,7 @@ import { useHeartbeat } from "@/shared/hooks/useHeartbeat";
 import { useInitializeCsrf } from "@/shared/hooks/useInitializeCsrf";
 import NotFound from "@/shared/components/not-found";
 import { RootErrorBoundary } from "@/shared/components/RootErrorBoundary";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 // Auth pages
 import { LoginPage } from "@/features/auth/pages/LoginPage";
@@ -166,6 +167,7 @@ function App() {
           </I18nProvider>
         </ThemeProvider>
       </QueryClientProvider>
+      <SpeedInsights />
     </RootErrorBoundary>
   );
 }
