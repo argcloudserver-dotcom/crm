@@ -4,7 +4,8 @@
   "installCommand": "pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm --filter @workspace/web build && pnpm --filter @workspace/api build:serverless",
   "outputDirectory": "apps/web/dist/public",
-  "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api", "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"] },
+    { "src": "/(.*)", "dest": "/index.html", "status": 200 }
   ]
 }
