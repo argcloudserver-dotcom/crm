@@ -24,7 +24,7 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
  * runtime dependencies. Only truly native / optional modules are externalized.
  */
 async function buildServerless() {
-  const distDir = path.resolve(artifactDir, "../web/dist/public/api");
+  const distDir = path.resolve(artifactDir, "../../api");
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
