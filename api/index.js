@@ -1,8 +1,23 @@
 // Vercel serverless function that wraps the bundled Express app.
-// The esbuild bundler outputs to ../../api (this directory) and names the
-// main bundle vercel-handler.mjs. This function re-exports it so Vercel
-// auto-detects it as a serverless function and routes /api/* requests to it.
+// The bundled handler is exported as ESM and loaded dynamically at startup.
 
-import app from './vercel-handler.mjs';
+let handlerPromise = null;
 
-export default app;
+function initializeHandler() {
+  if (!handlerPromise) {
+    handlerPromise = import('./vercel-handler.mjs').then(m => m.default);
+  }
+  return handlerPromise;
+}
+
+module.exports = async (req, res) => {
+  try {
+    const handler = await initializeHandler();
+    handler(req, res);
+  } catch (error) {
+    console.error('[API] Handler error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+};
