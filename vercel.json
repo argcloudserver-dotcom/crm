@@ -3,7 +3,7 @@
   "buildCommand": "pnpm install && pnpm run build",
   "installCommand": "pnpm install",
   "functions": {
-    "apps/api/dist/**": {
+    "apps/api/dist/index.mjs": {
       "runtime": "nodejs20.x"
     }
   },
