@@ -81,7 +81,17 @@ export function LoginPage() {
       await refetch();
       setLocation("/home");
     } catch (err: any) {
-      setError(err?.message || "Invalid credentials. Please try again.");
+      // SECURITY FIX: route pending-approval users to the dedicated page
+      // instead of just showing an error in the login form.
+      const msg: string = err?.message || "";
+      if (
+        err?.status === 403 &&
+        /pending admin approval/i.test(msg)
+      ) {
+        setLocation(`/pending-approval?email=${encodeURIComponent(data.email)}`);
+        return;
+      }
+      setError(msg || "Invalid credentials. Please try again.");
     } finally {
       setIsLoading(false);
     }

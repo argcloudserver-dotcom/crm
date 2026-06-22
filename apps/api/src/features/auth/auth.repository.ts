@@ -24,6 +24,15 @@ export async function findByEmail(email: string): Promise<User | null> {
   return user ?? null;
 }
 
+export async function findByName(name: string): Promise<User | null> {
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.name, name))
+    .limit(1);
+  return user ?? null;
+}
+
 export async function findByResetToken(token: string): Promise<User | null> {
   const [user] = await db
     .select()

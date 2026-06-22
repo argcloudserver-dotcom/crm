@@ -28,7 +28,7 @@ function generateVerifyCode(): string {
 
 export type RegisterResult =
   | { status: "created" | "resent"; user: Record<string, unknown> }
-  | { status: "conflict"; reason: string };
+  | { status: "conflict"; reason: string; field?: "email" | "username" };
 
 export async function listTeamLeaders() {
   try {
@@ -69,10 +69,25 @@ export async function register(input: RegisterInput): Promise<RegisterResult> {
     ? ("sales" as ValidRole)
     : (VALID_ROLES[0] as ValidRole);
 
+  // Username (name) uniqueness check — returned BEFORE issuing OTP so the
+  // user can correct the form.
+  const nameTaken = await repo.findByName(input.name);
+  if (nameTaken) {
+    return {
+      status: "conflict",
+      reason: "Username is already taken.",
+      field: "username",
+    };
+  }
+
   const existing = await repo.findByEmail(input.email);
   if (existing) {
     if (existing.emailVerifiedAt) {
-      return { status: "conflict", reason: "Email already registered" };
+      return {
+        status: "conflict",
+        reason: "Email is already in use.",
+        field: "email",
+      };
     }
     const verifyCode = generateVerifyCode();
     const verifyTokenExpires = new Date(Date.now() + 15 * 60 * 1000);
@@ -95,7 +110,10 @@ export async function register(input: RegisterInput): Promise<RegisterResult> {
     email: input.email.toLowerCase(),
     passwordHash,
     phone: input.phone ?? null,
-    status: "active",
+    // SECURITY FIX: new accounts MUST start as pending until an admin
+    // approves them. Previously this was "active", which allowed users to
+    // access the CRM immediately after verifying email.
+    status: "pending",
     role: userRole,
     teamLeaderId: null,
     verifyToken: verifyCode,
@@ -189,6 +207,29 @@ export async function login(input: LoginInput): Promise<AuthLoginResult> {
         "Please verify your email before logging in. Check your inbox for the verification code.",
     };
   }
+  if (user.status === "rejected") {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Your account application was rejected. Please contact an administrator.",
+    };
+  }
+  if (user.status === "suspended") {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Your account has been suspended. Please contact an administrator.",
+    };
+  }
+  if (user.status === "pending") {
+    // SECURITY FIX: do NOT issue a session token for the main system. We
+    // return a special 403 the frontend uses to route to the pending page.
+    return {
+      ok: false,
+      status: 403,
+      reason: "Your account is pending admin approval.",
+    };
+  }
   const token = await createSession(user.id);
   return { ok: true, result: { user: sanitizeUser(user), token } };
 }
@@ -277,7 +318,8 @@ export async function findOrCreateMockOAuthUser(input: {
     oauthProvider: input.provider === "mock" ? "google" : input.provider,
     oauthId: `mock-${input.provider}-${email}`,
     emailVerifiedAt: new Date(),
-    status: "active",
+    // SECURITY FIX: OAuth signups must also wait for admin approval.
+    status: "pending",
     role: "sales",
   });
 }

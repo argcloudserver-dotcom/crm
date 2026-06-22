@@ -35,7 +35,7 @@ if (env.AUTH_MODE === "real") {
         {
           clientID: env.GOOGLE_CLIENT_ID,
           clientSecret: env.GOOGLE_CLIENT_SECRET!,
-          callbackURL: `${env.PUBLIC_APP_URL}/auth/google/callback`,
+          callbackURL: `${env.PUBLIC_APP_URL}/api/auth/google/callback`,
         },
         async (accessToken, refreshToken, profile, cb) => {
           try {
@@ -59,7 +59,7 @@ if (env.AUTH_MODE === "real") {
         {
           clientID: env.FACEBOOK_CLIENT_ID,
           clientSecret: env.FACEBOOK_CLIENT_SECRET!,
-          callbackURL: `${env.PUBLIC_APP_URL}/auth/facebook/callback`,
+          callbackURL: `${env.PUBLIC_APP_URL}/api/auth/facebook/callback`,
           profileFields: ["id", "emails", "name"],
         },
         async (accessToken, refreshToken, profile, cb) => {
@@ -99,7 +99,11 @@ router.get("/auth/approval-status", asyncHandler(async (req, res) => {
 
 router.post("/auth/register", validateBody(registerBody), asyncHandler(async (req, res) => {
   const result = await service.register(req.body);
-  if (result.status === "conflict") return fail(res, 409, { code: "EMAIL_EXISTS", message: result.reason });
+  if (result.status === "conflict") {
+    const code =
+      result.field === "username" ? "USERNAME_EXISTS" : "EMAIL_EXISTS";
+    return fail(res, 409, { code, message: result.reason, field: result.field });
+  }
   return created(res, { user: sanitizeUser(result.user) });
 }));
 
@@ -154,9 +158,22 @@ router.post("/auth/resend-verification", resendVerificationLimiter, validateBody
 // ── OAuth Handlers ──────────────────────────────────────────────────────────
 
 async function completeOAuthLogin(req: any, res: any, user: User): Promise<void> {
+  const baseUrl = env.PUBLIC_APP_URL || "/";
+  // SECURITY FIX: do not issue a session token for the main system unless
+  // the account is active. Pending / rejected / suspended OAuth users are
+  // redirected to the pending-approval page instead of the dashboard.
+  if (user.status === "rejected") {
+    return res.redirect(`${baseUrl}/login?error=account_rejected`);
+  }
+  if (user.status === "suspended") {
+    return res.redirect(`${baseUrl}/login?error=account_suspended`);
+  }
+  if (user.status !== "active") {
+    return res.redirect(`${baseUrl}/pending-approval?email=${encodeURIComponent(user.email)}`);
+  }
   const token = await service.startSessionForOAuthUser(user);
   setSessionCookie(res, token);
-  res.redirect(env.PUBLIC_APP_URL || "/");
+  res.redirect(`${baseUrl}/home`);
 }
 
 async function mockOAuthSignIn(req: any, res: any, provider: "google" | "facebook"): Promise<void> {

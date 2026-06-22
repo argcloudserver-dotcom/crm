@@ -28,27 +28,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
 
-  const [_, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
-  if (currentUser?.status === "pending" && !isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md text-center space-y-4 p-8 border rounded-lg shadow-sm bg-card">
-          <h2 className="text-2xl font-bold tracking-tight">Account Pending</h2>
-          <p className="text-muted-foreground">
-            Your account is currently pending approval from an administrator.
-            You will be able to access the system once approved.
-          </p>
-          <button
-            onClick={() => setLocation("/login")}
-            className="text-primary hover:underline text-sm font-medium"
-          >
-            Back to login
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // SECURITY FIX: pending / rejected accounts must NEVER land on a
+  // protected page. Force-redirect them to the dedicated pending page so
+  // even if a session cookie was created the CRM stays out of reach.
+  useEffect(() => {
+    if (isLoading || !currentUser) return;
+    const blocked = currentUser.status === "pending" || currentUser.status === "rejected";
+    const onPublic =
+      location.startsWith("/pending-approval") ||
+      location.startsWith("/login") ||
+      location.startsWith("/register") ||
+      location.startsWith("/verify-email") ||
+      location.startsWith("/forgot-password") ||
+      location.startsWith("/reset-password");
+    if (blocked && !onPublic) {
+      setLocation("/pending-approval");
+    }
+  }, [currentUser, isLoading, location, setLocation]);
 
   return (
     <AuthContext.Provider value={{ currentUser: currentUser || null, isLoading, refetch }}>

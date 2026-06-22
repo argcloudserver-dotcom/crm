@@ -19,6 +19,7 @@ import { ForgotPasswordPage } from "@/features/auth/pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/features/auth/pages/ResetPasswordPage";
 import { VerifyEmailPage } from "@/features/auth/pages/VerifyEmailPage";
 import { PendingApprovalPage } from "@/features/auth/pages/PendingApprovalPage";
+import { OAuthCallbackPage } from "@/features/auth/pages/OAuthCallbackPage";
 
 // Dashboard pages
 import { HomePage } from "@/features/home/pages/HomePage";
@@ -55,7 +56,19 @@ const queryClient = new QueryClient({
   },
 });
 
-const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/pending-approval"];
+const AUTH_PATHS = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+  "/pending-approval",
+  // Public OAuth landing routes — must NEVER be gated by ProtectedPages,
+  // otherwise the user is redirected to /login before the code can be
+  // exchanged, producing an infinite login loop.
+  "/auth/google/callback",
+  "/auth/facebook/callback",
+];
 
 function ProtectedPages() {
   const { currentUser, isLoading } = useAuth();
@@ -63,6 +76,10 @@ function ProtectedPages() {
 
   if (isLoading) return null;
   if (!currentUser) return <Redirect to="/login" />;
+  // SECURITY FIX: pending / rejected accounts must NOT reach the CRM.
+  if (currentUser.status === "pending" || currentUser.status === "rejected") {
+    return <Redirect to="/pending-approval" />;
+  }
 
   return (
     <AppLayout>
@@ -114,6 +131,8 @@ function Router() {
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/verify-email" component={VerifyEmailPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />
+        <Route path="/auth/google/callback" component={OAuthCallbackPage} />
+        <Route path="/auth/facebook/callback" component={OAuthCallbackPage} />
       </Switch>
     );
   }

@@ -64,7 +64,8 @@ export function configurePassport(): void {
                 oauthProvider: "google",
                 oauthId: profile.id,
                 emailVerifiedAt: new Date(),
-                status: "active",
+                // SECURITY FIX: new OAuth users must wait for admin approval.
+                status: "pending",
                 role: "sales",
               })
               .returning();
@@ -140,7 +141,8 @@ export function configurePassport(): void {
                 oauthProvider: "facebook",
                 oauthId: profile.id,
                 emailVerifiedAt: email ? new Date() : null,
-                status: "active",
+                // SECURITY FIX: new OAuth users must wait for admin approval.
+                status: "pending",
                 role: "sales",
               })
               .returning();
