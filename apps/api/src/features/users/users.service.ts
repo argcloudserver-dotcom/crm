@@ -37,9 +37,13 @@ export async function getUser(userId: string) {
 export async function updateUser(
   userId: string,
   input: UpdateUserInput,
-  caller: { id: string; permissions: string[] },
+  caller: { id: string; role?: string; canManagePrivileged?: boolean; permissions?: string[] },
 ) {
-  const canManagePrivileged = caller.permissions?.includes("permissions.manage");
+  const canManagePrivileged =
+    caller.canManagePrivileged === true ||
+    caller.permissions?.includes("permissions.manage") ||
+    caller.permissions?.includes("employees.edit") ||
+    false;
 
   const updateData: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
@@ -61,6 +65,7 @@ export async function updateUser(
   const updated = await repo.updateById(userId, updateData);
   return updated ? sanitizeUser(updated) : null;
 }
+
 
 export async function deleteUser(userId: string): Promise<void> {
   await repo.deleteById(userId);

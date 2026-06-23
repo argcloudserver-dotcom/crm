@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useListUsers, apiFetch, getListUsersQueryKey } from "@workspace/api-client";
+import { useListUsers, useListTeamLeaders, apiFetch, getListUsersQueryKey } from "@workspace/api-client";
+
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader } from "@/shared/components/ui/card";
@@ -28,19 +29,29 @@ export function EmployeesPage() {
   const [, setLocation] = useLocation();
   const { data: users = [], isLoading } = useListUsers({ status: "active" });
 
-  const isAdmin = currentUser && ["ceo", "admin"].includes(currentUser.role);
+  const isAdmin = currentUser && ["ceo", "admin", "director"].includes(currentUser.role);
+
 
   const [editingUser, setEditingUser] = useState<Employee | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", phone: "", title: "", role: "" });
+  const [editForm, setEditForm] = useState({ name: "", phone: "", title: "", role: "", teamLeaderId: "" });
   const [editLoading, setEditLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  const { data: teamLeaders = [] } = useListTeamLeaders();
+
   function openEdit(e: React.MouseEvent, u: Employee) {
     e.stopPropagation();
     setEditingUser(u);
-    setEditForm({ name: u.name, phone: u.phone ?? "", title: u.title ?? "", role: u.role });
+    setEditForm({
+      name: u.name,
+      phone: u.phone ?? "",
+      title: u.title ?? "",
+      role: u.role,
+      teamLeaderId: (u as any).teamLeaderId ?? "",
+    });
   }
+
 
   function openDelete(e: React.MouseEvent, u: Employee) {
     e.stopPropagation();
@@ -59,12 +70,17 @@ export function EmployeesPage() {
           phone: editForm.phone || null,
           title: editForm.title || null,
           role: editForm.role,
+          teamLeaderId:
+            editForm.role === "sales"
+              ? (editForm.teamLeaderId || null)
+              : null,
         }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as any;
         throw new Error(err.error || "Failed to update");
       }
+
       await queryClient.invalidateQueries({ queryKey: getListUsersQueryKey({ status: "active" }) });
       toast.success("تم تحديث الموظف");
       setEditingUser(null);
@@ -214,7 +230,27 @@ export function EmployeesPage() {
                 </SelectContent>
               </Select>
             </div>
+            {editForm.role === "sales" && (
+              <div className="space-y-1.5">
+                <Label>قائد الفريق</Label>
+                <Select
+                  value={editForm.teamLeaderId || "none"}
+                  onValueChange={(v) =>
+                    setEditForm(f => ({ ...f, teamLeaderId: v === "none" ? "" : v }))
+                  }
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— بدون —</SelectItem>
+                    {teamLeaders.map((tl: any) => (
+                      <SelectItem key={tl.id} value={tl.id}>{tl.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingUser(null)}>إلغاء</Button>
             <Button onClick={handleEdit} disabled={editLoading || !editForm.name.trim()}>

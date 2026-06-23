@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { resolvePermission } from "@workspace/permissions";
 import { requireAuth } from "../../shared/middlewares/requireAuth";
 import { withPermission } from "../../shared/middlewares/withPermission";
 import { asyncHandler } from "../../shared/utils/asyncHandler";
@@ -16,6 +17,7 @@ import {
   userIdParams,
 } from "./users.schemas";
 import * as service from "./users.service";
+
 
 const router = Router();
 
@@ -56,15 +58,26 @@ router.patch(
   validateParams(userIdParams),
   validateBody(updateUserBody),
   asyncHandler(async (req, res) => {
-    const caller = req.currentUser as { id: string; permissions: string[] };
+    const dbUser = req.currentUser as { id: string; role: string };
 
-    // self edit allowed; editing others requires users.manage
-    if (
-      req.params.userId !== caller.id &&
-      !caller.permissions?.includes("users.manage")
-    ) {
+    // Resolve manage permission from DB (role defaults + overrides) instead of
+    // a non-existent `permissions` array on the user row.
+    const canManageUsers = await resolvePermission(
+      dbUser.id,
+      "employees.edit",
+      dbUser.role,
+    );
+
+    // self edit allowed; editing others requires employees.edit
+    if (req.params.userId !== dbUser.id && !canManageUsers) {
       return fail(res, 403, { code: "FORBIDDEN", message: "Forbidden" });
     }
+
+    const caller = {
+      id: dbUser.id,
+      role: dbUser.role,
+      canManagePrivileged: canManageUsers,
+    };
 
     const updated = await service.updateUser(req.params.userId, req.body, caller);
     if (!updated) {
@@ -73,6 +86,7 @@ router.patch(
     return ok(res, updated);
   }),
 );
+
 
 router.delete(
   "/users/:userId",

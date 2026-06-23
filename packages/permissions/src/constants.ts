@@ -42,28 +42,10 @@ export type PermissionKey = typeof PERMISSIONS[keyof typeof PERMISSIONS];
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> = {
   ceo: Object.fromEntries(Object.values(PERMISSIONS).map((p) => [p, true])),
   admin: Object.fromEntries(Object.values(PERMISSIONS).map((p) => [p, true])),
-  director: {
-    "leads.view": true,
-    "leads.see_all_sales_leads": true,
-    "leads.assign": false,
-    "leads.reassign": true,
-    "leads.see_phone": true,
-    "leads.see_email": true,
-    "leads.see_notes": true,
-    "clients.view": true,
-    "resale.view": true,
-    "resale.see_owner_info": true,
-    "projects.view": true,
-    "projects.manage": false,
-    "employees.view": true,
-    "employees.edit": false,
-    "reports.view": true,
-    "reports.export": true,
-    "dashboard.live": true,
-    "notifications.view": true,
-    "planner.view": true,
-    "profile.edit": true,
-  },
+  // Director has full management permissions, mirroring CEO/Admin so they can
+  // edit employees and change roles.
+  director: Object.fromEntries(Object.values(PERMISSIONS).map((p) => [p, true])),
+
   team_leader: {
     "leads.view": true,
     "leads.create": true,
