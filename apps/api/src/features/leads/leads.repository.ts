@@ -123,3 +123,37 @@ export async function insertActivity(
   const [a] = await db.insert(leadActivitiesTable).values(values).returning();
   return a;
 }
+
+// ---- Assignment history ----------------------------------------------------
+import { leadAssignmentsTable } from "@workspace/db";
+import { desc } from "drizzle-orm";
+
+export type AssignmentRow = typeof leadAssignmentsTable.$inferSelect;
+export type InsertAssignment = typeof leadAssignmentsTable.$inferInsert;
+
+export async function insertAssignment(values: InsertAssignment) {
+  const [row] = await db.insert(leadAssignmentsTable).values(values).returning();
+  return row;
+}
+
+export async function insertAssignments(values: InsertAssignment[]) {
+  if (values.length === 0) return [] as AssignmentRow[];
+  return db.insert(leadAssignmentsTable).values(values).returning();
+}
+
+export async function listAssignmentsWithUsers(leadId: string) {
+  return db
+    .select({
+      assignment: leadAssignmentsTable,
+      assignedToName: usersTable.name,
+    })
+    .from(leadAssignmentsTable)
+    .leftJoin(usersTable, eq(leadAssignmentsTable.assignedTo, usersTable.id))
+    .where(eq(leadAssignmentsTable.leadId, leadId))
+    .orderBy(desc(leadAssignmentsTable.assignedAt));
+}
+
+export async function findUsersByIds(ids: string[]) {
+  if (ids.length === 0) return [];
+  return db.select().from(usersTable).where(inArray(usersTable.id, ids));
+}

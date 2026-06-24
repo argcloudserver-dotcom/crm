@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { format } from "date-fns";
 import { ArrowLeft, Timer } from "lucide-react";
@@ -6,6 +6,7 @@ import {
   useListLeadActivities, useListLeads, useListProjects, useListUsers,
 } from "@workspace/api-client";
 import { useI18n } from "@/shared/contexts/i18nContext";
+import { usePermissions } from "@/shared/contexts/PermissionsContext";
 import { useAuth } from "@/shared/contexts/AuthContext";
 import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
@@ -13,6 +14,7 @@ import { cn } from "@/shared/utils/utils";
 
 import { LeadHeader } from "../components/LeadHeader";
 import { LeadActivityTimeline } from "../components/LeadActivityTimeline";
+import { LeadAssignmentTimeline } from "../components/LeadAssignmentTimeline";
 import { LogActivityForm } from "../components/LogActivityForm";
 import { LeadSidebar } from "../components/LeadSidebar";
 import { EditLeadDialog } from "../modals/EditLeadDialog";
@@ -25,7 +27,8 @@ import { toast } from "sonner";
 export function LeadDetailPage() {
   const { t, locale } = useI18n();
   const { currentUser } = useAuth();
-  const canManage = !!currentUser && ["ceo", "admin", "director", "team_leader"].includes(currentUser.role);
+  const { can } = usePermissions();
+  const canManage = can("leads.edit") || can("leads.assign");
   const isAr = locale === "ar";
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -129,6 +132,8 @@ export function LeadDetailPage() {
             isAr={isAr}
             t={t}
           />
+
+          <LeadAssignmentTimeline leadId={lead.id} isAr={isAr} users={users as any[]} />
 
           <LogActivityForm
             isSaving={m.isCreatingActivity}

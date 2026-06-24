@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useListUsers, useListTeamLeaders, apiFetch, getListUsersQueryKey } from "@workspace/api-client";
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -15,6 +15,7 @@ import { Label } from "@/shared/components/ui/label";
 import { Mail, Phone, Edit, Trash2, ChevronRight } from "lucide-react";
 import { cn } from "@/shared/utils/utils";
 import { useI18n } from "@/shared/contexts/i18nContext";
+import { usePermissions } from "@/shared/contexts/PermissionsContext";
 import { useAuth } from "@/shared/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -29,7 +30,10 @@ export function EmployeesPage() {
   const [, setLocation] = useLocation();
   const { data: users = [], isLoading } = useListUsers({ status: "active" });
 
-  const isAdmin = currentUser && ["ceo", "admin", "director"].includes(currentUser.role);
+  const { can } = usePermissions();
+  const canEdit   = can("employees.edit");
+  const canDelete = can("employees.delete");
+  const isAdmin   = canEdit;
 
 
   const [editingUser, setEditingUser] = useState<Employee | null>(null);

@@ -163,3 +163,48 @@ export async function changeRoleBeforeApproval(
 
   return sanitizeUser(updated);
 }
+
+// Assignable users grouped by role for the current viewer.
+// Team Leader: only their own team's sales.
+// Director: all team leaders + all sales.
+// Admin/CEO: directors + team leaders + sales.
+export async function listAssignable(viewer: { id: string; role: string }) {
+  const users = await repo.findAll();
+  const active = users.filter((u) => u.status === "active");
+
+  const empty = { directors: [], teamLeaders: [], sales: [] } as Record<
+    "directors" | "teamLeaders" | "sales",
+    Array<{ id: string; name: string; email: string; avatarUrl: string | null; teamLeaderId: string | null }>
+  >;
+
+  const slim = (u: typeof active[number]) => ({
+    id: u.id, name: u.name, email: u.email,
+    avatarUrl: u.avatarUrl ?? null,
+    teamLeaderId: u.teamLeaderId ?? null,
+  });
+
+  if (viewer.role === "team_leader") {
+    return {
+      ...empty,
+      sales: active.filter((u) => u.role === "sales" && u.teamLeaderId === viewer.id).map(slim),
+    };
+  }
+
+  if (viewer.role === "director") {
+    return {
+      ...empty,
+      teamLeaders: active.filter((u) => u.role === "team_leader").map(slim),
+      sales: active.filter((u) => u.role === "sales").map(slim),
+    };
+  }
+
+  if (viewer.role === "admin" || viewer.role === "ceo") {
+    return {
+      directors: active.filter((u) => u.role === "director").map(slim),
+      teamLeaders: active.filter((u) => u.role === "team_leader").map(slim),
+      sales: active.filter((u) => u.role === "sales").map(slim),
+    };
+  }
+
+  return empty;
+}

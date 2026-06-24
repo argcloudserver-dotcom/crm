@@ -66,3 +66,19 @@ export type AssignLeadInput = z.infer<typeof assignLeadBody>;
 export type UpdateLeadStatusInput = z.infer<typeof updateLeadStatusBody>;
 export type CreateActivityInput = z.infer<typeof createActivityBody>;
 export type ListLeadsQuery = z.infer<typeof listLeadsQuery>;
+// Multi-assignment with role tracking (director/admin assign across roles).
+const assignmentRoleEnum = z.enum(["director", "team_leader", "sales"]);
+
+export const assignTargetSchema = z.object({
+  userId: z.string().uuid(),
+  role: assignmentRoleEnum,
+});
+
+export const multiAssignBody = z.object({
+  targets: z.array(assignTargetSchema).min(1).max(50),
+  note: z.string().trim().max(1000).nullable().optional(),
+  setPrimary: z.boolean().optional(), // first sales target becomes primarySalesId
+});
+
+export type MultiAssignInput = z.infer<typeof multiAssignBody>;
+export type AssignTarget = z.infer<typeof assignTargetSchema>;

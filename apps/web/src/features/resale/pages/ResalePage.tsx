@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useListResaleUnits } from "@workspace/api-client";
 import { Dialog } from "@/shared/components/ui/dialog";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { Home } from "lucide-react";
+import { usePermissions } from "@/shared/contexts/PermissionsContext";
 import { useAuth } from "@/shared/contexts/AuthContext";
 import { useI18n } from "@/shared/contexts/i18nContext";
 import { toast } from "sonner";
@@ -29,7 +30,11 @@ function formatPrice(price: string | null | undefined): string {
 export function ResalePage() {
   const { t } = useI18n();
   const { currentUser } = useAuth();
-  const isAdmin = !!currentUser && ["ceo", "admin", "director"].includes(currentUser.role);
+  const { can } = usePermissions();
+  const canEdit   = can("resale.edit");
+  const canDelete = can("resale.delete");
+  const canCreate = can("resale.create");
+  const isAdmin   = canEdit || canCreate;
 
   const [search, setSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);

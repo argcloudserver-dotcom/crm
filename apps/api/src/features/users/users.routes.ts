@@ -1,4 +1,4 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import { resolvePermission } from "@workspace/permissions";
 import { requireAuth } from "../../shared/middlewares/requireAuth";
 import { withPermission } from "../../shared/middlewares/withPermission";
@@ -37,6 +37,15 @@ router.get(
   requireAuth,
   withPermission("users.manage"),
   asyncHandler(async (_req, res) => ok(res, await service.listPendingUsers())),
+);
+
+router.get(
+  "/users/assignable",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const viewer = req.currentUser! as { id: string; role: string };
+    return ok(res, await service.listAssignable(viewer));
+  }),
 );
 
 router.get(
@@ -160,5 +169,7 @@ router.patch(
     return ok(res, result);
   }),
 );
+
+
 
 export default router;

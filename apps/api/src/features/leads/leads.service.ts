@@ -280,6 +280,41 @@ export interface BulkImportResult {
   errors: Array<{ row: number; message: string }>;
 }
 
+const VALID_LEAD_SOURCES = [
+  "manual",
+  "import",
+  "campaign",
+  "referral",
+  "website",
+  "social",
+] as const;
+type ValidLeadSource = (typeof VALID_LEAD_SOURCES)[number];
+
+const VALID_LEAD_STATUSES = [
+  "new",
+  "called",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+  "lost",
+] as const;
+type ValidLeadStatus = (typeof VALID_LEAD_STATUSES)[number];
+
+function coerceSource(raw: unknown): ValidLeadSource {
+  const v = String(raw ?? "").trim().toLowerCase();
+  return (VALID_LEAD_SOURCES as readonly string[]).includes(v)
+    ? (v as ValidLeadSource)
+    : "import";
+}
+
+function coerceStatus(raw: unknown): ValidLeadStatus {
+  const v = String(raw ?? "").trim().toLowerCase();
+  return (VALID_LEAD_STATUSES as readonly string[]).includes(v)
+    ? (v as ValidLeadStatus)
+    : "new";
+}
+
 export async function bulkImport(
   req: Request,
   rows: BulkImportRow[],
@@ -289,29 +324,58 @@ export async function bulkImport(
   const values: Parameters<typeof repo.bulkInsert>[0] = [];
 
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+    const row = rows[i] ?? {};
     const rowNum = i + 2;
-    const name = String(row.Name ?? row.name ?? "").trim();
-    if (!name) {
-      errors.push({ row: rowNum, message: "Name is required" });
-      continue;
+    try {
+      const name = String(row.Name ?? row.name ?? "").trim();
+      if (!name) {
+        errors.push({ row: rowNum, message: "Name is required" });
+        continue;
+      }
+      const phoneRaw = String(row.Phone ?? row.phone ?? "").trim();
+      const emailRaw = String(row.Email ?? row.email ?? "").trim();
+      const notesRaw = String(row.Notes ?? row.notes ?? "").trim();
+      values.push({
+        name,
+        phone: phoneRaw || null,
+        email: emailRaw || null,
+        source: coerceSource(row.Source ?? row.source),
+        status: coerceStatus(row.Status ?? row.status),
+        notes: notesRaw || null,
+        createdBy: currentUser.id,
+      });
+    } catch (err) {
+      errors.push({
+        row: rowNum,
+        message: err instanceof Error ? err.message : "Invalid row",
+      });
     }
-    values.push({
-      name,
-      phone: String(row.Phone ?? row.phone ?? "").trim() || null,
-      email: String(row.Email ?? row.email ?? "").trim() || null,
-      source:
-        (String(row.Source ?? row.source ?? "manual").trim() as "manual") ||
-        "manual",
-      status:
-        (String(row.Status ?? row.status ?? "new").trim() as "new") || "new",
-      notes: String(row.Notes ?? row.notes ?? "").trim() || null,
-      createdBy: currentUser.id,
-    });
   }
 
-  if (values.length > 0) await repo.bulkInsert(values);
-  return { imported: values.length, errors };
+  let imported = 0;
+  if (values.length > 0) {
+    try {
+      await repo.bulkInsert(values);
+      imported = values.length;
+    } catch (err) {
+      // FIX: bulk insert failures used to surface as a 500 — fall back to
+      // per-row inserts so the caller gets a partial-success report instead.
+      logger.warn({ err }, "[leads.bulkImport] batch insert failed; retrying per row");
+      for (let i = 0; i < values.length; i++) {
+        try {
+          await repo.bulkInsert([values[i]]);
+          imported += 1;
+        } catch (rowErr) {
+          errors.push({
+            row: i + 2,
+            message:
+              rowErr instanceof Error ? rowErr.message : "Insert failed",
+          });
+        }
+      }
+    }
+  }
+  return { imported, errors };
 }
 
 // ── Internal notifications ───────────────────────────────────────────────────
@@ -386,4 +450,105 @@ async function notifyStatusChange(
   } catch (err) {
     logger.warn({ err }, "notifyStatusChange failed");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-target assignment with role tracking + history log.
+// ---------------------------------------------------------------------------
+import type { MultiAssignInput } from "./leads.schemas";
+
+const ROLE_HIERARCHY: Record<string, string[]> = {
+  // who each role is allowed to assign to (target roles)
+  admin:       ["director", "team_leader", "sales"],
+  ceo:         ["director", "team_leader", "sales"],
+  director:    ["team_leader", "sales"],
+  team_leader: ["sales"], // and only own team — enforced below
+  sales:       [],
+};
+
+export async function multiAssignLead(
+  req: Request,
+  leadId: string,
+  input: MultiAssignInput,
+) {
+  const viewer = req.currentUser!;
+  const allowedRoles = ROLE_HIERARCHY[viewer.role] ?? [];
+
+  const lead = await repo.findById(leadId);
+  if (!lead) return null;
+
+  // Visibility check for TL.
+  const visible = await getVisibleUserIds(viewer);
+  if (visible !== null && (!lead.primarySalesId || !visible.includes(lead.primarySalesId))) {
+    // TL can still create-then-assign their own leads (primary null is created
+    // via createLead in the same request) — but for an existing lead they
+    // don't own, refuse.
+    if (lead.primarySalesId) return { error: "forbidden" as const };
+  }
+
+  // Load target users and validate.
+  const targetIds = [...new Set(input.targets.map((t) => t.userId))];
+  const targetUsers = await repo.findUsersByIds(targetIds);
+  const byId = new Map(targetUsers.map((u) => [u.id, u]));
+
+  for (const t of input.targets) {
+    const u = byId.get(t.userId);
+    if (!u) return { error: "target_not_found" as const };
+    if (u.role !== t.role) return { error: "role_mismatch" as const };
+    if (!allowedRoles.includes(t.role)) return { error: "forbidden_role" as const };
+    if (viewer.role === "team_leader" && u.teamLeaderId !== viewer.id) {
+      return { error: "not_in_your_team" as const };
+    }
+  }
+
+  // Insert history rows.
+  const inserted = await repo.insertAssignments(
+    input.targets.map((t) => ({
+      leadId,
+      assignedTo: t.userId,
+      assignedToRole: t.role,
+      assignedBy: viewer.id,
+      assignmentType: "assign" as const,
+      note: input.note ?? null,
+      isActive: true,
+    })),
+  );
+
+  // Optionally update primarySalesId to the first sales target.
+  const firstSales = input.targets.find((t) => t.role === "sales");
+  if (input.setPrimary !== false && firstSales) {
+    await repo.updateById(leadId, { primarySalesId: firstSales.userId });
+    // notify the new primary sales
+    void notifyAssignment(
+      req,
+      leadId,
+      firstSales.userId,
+      lead.name,
+      lead.phone ?? "N/A",
+      lead.projectId,
+    );
+  }
+
+  // Notify every other assignee (cheap fan-out).
+  for (const t of input.targets) {
+    if (firstSales && t.userId === firstSales.userId) continue;
+    void notifyAssignment(
+      req,
+      leadId,
+      t.userId,
+      lead.name,
+      lead.phone ?? "N/A",
+      lead.projectId,
+    );
+  }
+
+  return { count: inserted.length, assignments: inserted };
+}
+
+export async function listAssignmentHistory(leadId: string) {
+  const rows = await repo.listAssignmentsWithUsers(leadId);
+  return rows.map((r) => ({
+    ...r.assignment,
+    assignedToName: r.assignedToName ?? null,
+  }));
 }

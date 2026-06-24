@@ -11,8 +11,14 @@ export async function recordHeartbeat(userId: string): Promise<HeartbeatResult> 
   const now = Date.now();
   const lastUpdate = lastDbUpdate.get(userId) ?? 0;
   if (now - lastUpdate > DB_SYNC_INTERVAL) {
-    await markUserOnline(userId);
-    lastDbUpdate.set(userId, now);
+    // FIX: heartbeat must always respond — a transient DB failure used to
+    // bubble up and the upstream proxy returned 502. Swallow + log instead.
+    try {
+      await markUserOnline(userId);
+      lastDbUpdate.set(userId, now);
+    } catch (err) {
+      logger.warn({ err, userId }, "[heartbeat] markUserOnline failed");
+    }
   }
   return { ok: true, timestamp: now };
 }
@@ -27,5 +33,5 @@ export function startOfflineSweeper(): void {
     } catch (err) {
       logger.warn({ err }, "[heartbeat] sweeper failed");
     }
-  }, SWEEP_INTERVAL_MS);
+  }, SWEEP_INTERVAL_MS).unref?.();
 }

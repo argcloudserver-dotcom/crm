@@ -12,6 +12,7 @@ import {
 } from "../../shared/utils/validate";
 import {
   assignLeadBody,
+  multiAssignBody,
   createActivityBody,
   createLeadBody,
   leadIdParams,
@@ -168,9 +169,33 @@ router.post(
       });
     }
 
-    // FIX: use ExcelJS instead of XLSX
+    // FIX: support both .xlsx and .csv uploads. The web modal accepts CSV,
+    // so parsing only as xlsx caused valid CSV uploads to 400.
+    const filename = (req.file.originalname || "").toLowerCase();
+    const mimetype = (req.file.mimetype || "").toLowerCase();
+    const isCsv =
+      filename.endsWith(".csv") ||
+      mimetype === "text/csv" ||
+      mimetype === "application/csv";
+
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(req.file.buffer);
+    try {
+      if (isCsv) {
+        // ExcelJS csv.read expects a Readable stream.
+        const { Readable } = await import("stream");
+        const stream = Readable.from(req.file.buffer);
+        await workbook.csv.read(stream as unknown as NodeJS.ReadableStream);
+      } else {
+        await workbook.xlsx.load(req.file.buffer);
+      }
+    } catch {
+      return fail(res, 400, {
+        code: "INVALID_WORKBOOK",
+        message: isCsv
+          ? "File is not a valid .csv"
+          : "File is not a valid .xlsx workbook",
+      });
+    }
 
     const worksheet = workbook.worksheets[0];
     if (!worksheet) {
@@ -180,7 +205,31 @@ router.post(
       });
     }
 
-    // Parse rows (first row is header)
+    // FIX: ExcelJS returns objects for hyperlinks, rich text, formulas, dates.
+    // Normalize to a plain string so downstream `String(v).trim()` is safe.
+    const cellToString = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      if (v instanceof Date) return v.toISOString();
+      if (typeof v === "object") {
+        const obj = v as {
+          text?: unknown;
+          result?: unknown;
+          richText?: Array<{ text?: string }>;
+          hyperlink?: unknown;
+        };
+        if (typeof obj.text === "string") return obj.text;
+        if (Array.isArray(obj.richText)) {
+          return obj.richText.map((r) => r?.text ?? "").join("");
+        }
+        if (obj.result !== undefined && obj.result !== null) {
+          return String(obj.result);
+        }
+        if (obj.hyperlink !== undefined) return String(obj.hyperlink);
+        return "";
+      }
+      return String(v);
+    };
+
     const header: string[] = [];
     const rows: Record<string, unknown>[] = [];
 
@@ -188,26 +237,50 @@ router.post(
       const values = row.values as unknown[];
 
       if (rowNumber === 1) {
-        // Header row (Excel rows are 1-indexed, values array starts at index 1)
         values.forEach((v, i) => {
-          if (i > 0) header[i - 1] = String(v ?? "");
+          if (i > 0) header[i - 1] = cellToString(v);
         });
       } else {
-        // Data rows
         const obj: Record<string, unknown> = {};
         values.forEach((v, i) => {
           if (i > 0 && header[i - 1]) {
-            obj[header[i - 1]] = v;
+            obj[header[i - 1]] = cellToString(v);
           }
         });
         rows.push(obj);
       }
     });
 
-    // Service layer will validate each row via Zod
     const result = await service.bulkImport(req, rows);
     return ok(res, result);
   }),
+);
+
+
+router.post(
+  "/leads/:leadId/assignments",
+  requireAuth,
+  withPermission("leads.assign"),
+  validateParams(leadIdParams),
+  validateBody(multiAssignBody),
+  asyncHandler(async (req, res) => {
+    const result = await service.multiAssignLead(req, req.params.leadId, req.body);
+    if (!result) return fail(res, 404, { code: "NOT_FOUND", message: "Lead not found" });
+    if ("error" in result) {
+      return fail(res, 403, { code: "FORBIDDEN", message: result.error });
+    }
+    return created(res, result);
+  }),
+);
+
+router.get(
+  "/leads/:leadId/assignments",
+  requireAuth,
+  withPermission("leads.view"),
+  validateParams(leadIdParams),
+  asyncHandler(async (req, res) =>
+    ok(res, await service.listAssignmentHistory(req.params.leadId)),
+  ),
 );
 
 export default router;

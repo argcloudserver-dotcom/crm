@@ -33,11 +33,26 @@ export function BulkImportModal({ open, onOpenChange }: BulkImportModalProps) {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) {
-        const data = await res.json() as { error?: string };
-        throw new Error(data.error ?? "Import failed");
+      const body = await res.json() as {
+        success?: boolean;
+        data?: ImportResult;
+        error?: { message?: string } | string;
+        imported?: number;
+        errors?: ImportResult["errors"];
+      };
+      if (!res.ok || body?.success === false) {
+        const msg =
+          typeof body?.error === "string"
+            ? body.error
+            : body?.error?.message ?? "Import failed";
+        throw new Error(msg);
       }
-      return res.json() as Promise<ImportResult>;
+      // FIX: API wraps responses in { success, data }. Unwrap and default errors.
+      const payload: ImportResult = {
+        imported: body?.data?.imported ?? body?.imported ?? 0,
+        errors: body?.data?.errors ?? body?.errors ?? [],
+      };
+      return payload;
     },
     onSuccess: (data) => {
       setResult(data);
@@ -111,27 +126,27 @@ export function BulkImportModal({ open, onOpenChange }: BulkImportModalProps) {
             <FileSpreadsheet className="w-4 h-4" /> Download Template
           </Button>
 
-          {result && (
+          {result && (() => { const errs = result.errors ?? []; return (
             <div className="rounded-lg border p-4 space-y-2">
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="w-4 h-4" />
                 <span className="text-sm font-medium">{result.imported} leads imported</span>
               </div>
-              {result.errors.length > 0 && (
+              {errs.length > 0 && (
                 <div className="space-y-1">
-                  {result.errors.slice(0, 5).map((e) => (
+                  {errs.slice(0, 5).map((e) => (
                     <div key={e.row} className="flex items-start gap-2 text-red-600 dark:text-red-400">
                       <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
                       <span className="text-xs">Row {e.row}: {e.message}</span>
                     </div>
                   ))}
-                  {result.errors.length > 5 && (
-                    <p className="text-xs text-muted-foreground">...and {result.errors.length - 5} more errors</p>
+                  {errs.length > 5 && (
+                    <p className="text-xs text-muted-foreground">...and {errs.length - 5} more errors</p>
                   )}
                 </div>
               )}
             </div>
-          )}
+          ); })()}
         </div>
 
         <DialogFooter>

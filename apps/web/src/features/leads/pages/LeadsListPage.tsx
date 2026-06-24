@@ -93,7 +93,8 @@ export function LeadsListPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const isAdmin = currentUser && ["ceo", "admin", "director", "team_leader"].includes(currentUser.role);
+  const isAdmin = !!(currentUser && ["ceo", "admin", "director", "team_leader"].includes(currentUser.role));
+  const canCreate = isAdmin;
   const isAr = locale === "ar";
 
   const { data: leads = [], isLoading } = useListLeads({
@@ -214,7 +215,7 @@ export function LeadsListPage() {
                 {isAr ? "استيراد جماعي" : "Bulk Import"}
               </button>
             )}
-			{isAdmin && (
+			{canCreate && (
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
               <DialogTrigger asChild>
                 <button style={{

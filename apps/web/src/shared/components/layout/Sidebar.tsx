@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+﻿import { Link, useLocation } from "wouter";
 import { useAuth } from "@/shared/contexts/AuthContext";
 import { cn } from "@/shared/utils/utils";
 import { UserAvatar } from "@/shared/components/UserAvatar";
@@ -21,10 +21,12 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useI18n } from "@/shared/contexts/i18nContext";
+import { usePermissions } from "@/shared/contexts/PermissionsContext";
 
 export function Sidebar() {
   const { currentUser } = useAuth();
   const { t } = useI18n();
+  const { can } = usePermissions();
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
@@ -39,8 +41,9 @@ export function Sidebar() {
 
   if (!currentUser) return null;
 
-  const isAdminOrHigher = ["ceo", "admin", "director"].includes(currentUser.role);
-  const isCeoOrAdmin = ["ceo", "admin"].includes(currentUser.role);
+  const canApproveEmployees  = can("employees.approve");
+  const canViewReports       = can("reports.view");
+  const canManagePermissions = can("permissions.manage");
 
   const navItems = [
     {
@@ -73,7 +76,7 @@ export function Sidebar() {
       title: t("sidebar.people"),
       items: [
         { href: "/employees", label: t("nav.employees"), icon: Users2 },
-        ...(isAdminOrHigher
+        ...(canApproveEmployees
           ? [{ href: "/employees/pending", label: t("nav.employees.pending"), icon: UserCircle }]
           : []),
       ],
@@ -82,8 +85,8 @@ export function Sidebar() {
       title: t("sidebar.tools"),
       items: [
         { href: "/planner", label: t("nav.planner"), icon: Calendar },
-        ...(isAdminOrHigher ? [{ href: "/reports", label: t("nav.reports"), icon: FileText }] : []),
-        ...(isCeoOrAdmin ? [{ href: "/permissions", label: t("nav.permissions"), icon: Shield }] : []),
+        ...(canViewReports ? [{ href: "/reports", label: t("nav.reports"), icon: FileText }] : []),
+        ...(canManagePermissions ? [{ href: "/permissions", label: t("nav.permissions"), icon: Shield }] : []),
       ],
     },
   ];

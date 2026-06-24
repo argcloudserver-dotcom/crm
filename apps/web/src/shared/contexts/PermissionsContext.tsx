@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+﻿import { createContext, useContext, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "./AuthContext";
 import { apiFetch } from "@workspace/api-client";
@@ -45,7 +45,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const can = (key: string): boolean => {
     if (!currentUser) return false;
-    if (currentUser.role === "ceo" || currentUser.role === "admin") return true;
+    // No role bypass - admin/ceo still respect explicit deny overrides.
     return permissions[key] ?? false;
   };
 
