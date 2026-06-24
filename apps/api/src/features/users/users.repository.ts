@@ -1,12 +1,20 @@
 import { db, usersTable, notificationsTable, type User } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 export async function findAll(): Promise<User[]> {
   return db.select().from(usersTable);
 }
 
 export async function findPending(): Promise<User[]> {
-  return db.select().from(usersTable).where(eq(usersTable.status, "pending"));
+  return db
+    .select()
+    .from(usersTable)
+    .where(
+      and(
+        eq(usersTable.status, "pending"),
+        eq(usersTable.profileCompleted, true),
+      ),
+    );
 }
 
 export async function findById(userId: string): Promise<User | null> {

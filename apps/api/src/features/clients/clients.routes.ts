@@ -18,7 +18,7 @@ clientsRouter.get(
   withPermission("clients.view"),
   async (req, res, n) => {
     try {
-      res.json(await svc.list(req.query));
+      res.json(await svc.list(req, req.query));
     } catch (e) {
       n(e);
     }

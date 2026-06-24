@@ -35,7 +35,7 @@ router.get(
   withPermission("leads.view"),
   validateQuery(listLeadsQuery),
   asyncHandler(async (req, res) =>
-    ok(res, await service.listLeads(req.query)),
+    ok(res, await service.listLeads(req, req.query)),
   ),
 );
 
@@ -43,7 +43,7 @@ router.get(
   "/leads/kanban",
   requireAuth,
   withPermission("leads.view"),
-  asyncHandler(async (_req, res) => ok(res, await service.getKanban())),
+  asyncHandler(async (req, res) => ok(res, await service.getKanban(req))),
 );
 
 router.post(
@@ -62,7 +62,7 @@ router.get(
   withPermission("leads.view"),
   validateParams(leadIdParams),
   asyncHandler(async (req, res) => {
-    const lead = await service.getLead(req.params.leadId);
+    const lead = await service.getLead(req, req.params.leadId);
     if (!lead) {
       return fail(res, 404, { code: "NOT_FOUND", message: "Lead not found" });
     }
@@ -143,7 +143,7 @@ router.get(
 router.post(
   "/leads/:leadId/activities",
   requireAuth,
-  withPermission("leads.create"),
+  withPermission("leads.edit"),
   validateParams(leadIdParams),
   validateBody(createActivityBody),
   asyncHandler(async (req, res) =>

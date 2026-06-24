@@ -57,6 +57,15 @@ export const resendVerificationBody = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
 });
 
+// Complete-profile flow: OAuth users land here after first sign-in and must
+// pick a role (and a team leader if they chose `sales`) before the CRM lets
+// them in. Phone is optional.
+export const completeProfileBody = z.object({
+  role: z.enum(["director", "team_leader", "sales"]),
+  teamLeaderId: z.string().uuid().nullable().optional(),
+  phone: z.string().trim().max(32).nullable().optional(),
+});
+
 export type RegisterInput = z.infer<typeof registerBody>;
 export type AdminCreateUserInput = z.infer<typeof adminCreateUserBody>;
 export type VerifyEmailInput = z.infer<typeof verifyEmailBody>;
@@ -64,3 +73,4 @@ export type LoginInput = z.infer<typeof loginBody>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordBody>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordBody>;
 export type ResendVerificationInput = z.infer<typeof resendVerificationBody>;
+export type CompleteProfileInput = z.infer<typeof completeProfileBody>;

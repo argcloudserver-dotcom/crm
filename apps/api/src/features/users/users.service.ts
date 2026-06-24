@@ -1,10 +1,12 @@
 import { sanitizeUser } from "../../lib/sanitize";
+import { logger } from "../../lib/logger";
 import {
   sendAccountApprovedEmail,
   sendAccountRejectedEmail,
 } from "../../lib/email/auth-emails";
 import * as repo from "./users.repository";
 import type {
+  ChangeRoleBeforeApprovalInput,
   ListUsersQuery,
   RejectUserInput,
   UpdateUserInput,
@@ -19,6 +21,9 @@ type PrivilegedField = (typeof PRIVILEGED_FIELDS)[number];
 
 export async function listUsers(query: ListUsersQuery) {
   let users = await repo.findAll();
+  // Fresh OAuth signups are not real approval requests until the user submits
+  // /complete-profile. Keep them out of admin/CEO employee queues/lists.
+  users = users.filter((u) => u.status !== "pending" || u.profileCompleted);
   if (query.role) users = users.filter((u) => u.role === query.role);
   if (query.status) users = users.filter((u) => u.status === query.status);
   return users.map(sanitizeUser);
@@ -76,6 +81,12 @@ export async function approveUser(
   approvedBy: string,
   appUrl: string,
 ) {
+  const current = await repo.findById(userId);
+  if (!current) return null;
+  if (!current.profileCompleted) {
+    return { error: "User must complete signup before approval" as const };
+  }
+
   const updated = await repo.updateById(userId, {
     status: "active",
     approvedBy,
@@ -111,6 +122,44 @@ export async function rejectUser(userId: string, input: RejectUserInput) {
     updated.name,
     input.reason ?? null,
   ).catch(() => {});
+
+  return sanitizeUser(updated);
+}
+
+/**
+ * Lets admin/ceo change a pending user's requested role BEFORE approving
+ * them. Logged for audit trail. Returns null if the user doesn't exist or
+ * is no longer pending.
+ */
+export async function changeRoleBeforeApproval(
+  userId: string,
+  input: ChangeRoleBeforeApprovalInput,
+  changedBy: string,
+) {
+  const current = await repo.findById(userId);
+  if (!current) return null;
+  if (current.status !== "pending") {
+    return { error: "User is not pending" as const };
+  }
+  if (!current.profileCompleted) {
+    return { error: "User must complete signup before role changes" as const };
+  }
+  const updated = await repo.updateById(userId, {
+    role: input.newRole,
+    teamLeaderId: input.newRole === "sales" ? input.teamLeaderId ?? null : null,
+  });
+  if (!updated) return null;
+
+  logger.info(
+    {
+      event: "user.role_changed_before_approval",
+      userId,
+      from: current.role,
+      to: input.newRole,
+      changedBy,
+    },
+    "Admin changed pending user role before approval",
+  );
 
   return sanitizeUser(updated);
 }

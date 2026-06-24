@@ -35,14 +35,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // even if a session cookie was created the CRM stays out of reach.
   useEffect(() => {
     if (isLoading || !currentUser) return;
-    const blocked = currentUser.status === "pending" || currentUser.status === "rejected";
     const onPublic =
       location.startsWith("/pending-approval") ||
+      location.startsWith("/complete-profile") ||
       location.startsWith("/login") ||
       location.startsWith("/register") ||
       location.startsWith("/verify-email") ||
       location.startsWith("/forgot-password") ||
       location.startsWith("/reset-password");
+    // OAuth-incomplete profile: send to /complete-profile FIRST so the user
+    // can fill in role/team leader before anything else gates them.
+    if (currentUser.profileCompleted === false && !location.startsWith("/complete-profile")) {
+      setLocation("/complete-profile");
+      return;
+    }
+    const blocked = currentUser.status === "pending" || currentUser.status === "rejected";
     if (blocked && !onPublic) {
       setLocation("/pending-approval");
     }

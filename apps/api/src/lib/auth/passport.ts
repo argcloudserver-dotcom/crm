@@ -67,6 +67,7 @@ export function configurePassport(): void {
                 // SECURITY FIX: new OAuth users must wait for admin approval.
                 status: "pending",
                 role: "sales",
+                profileCompleted: false,
               })
               .returning();
 
@@ -144,6 +145,7 @@ export function configurePassport(): void {
                 // SECURITY FIX: new OAuth users must wait for admin approval.
                 status: "pending",
                 role: "sales",
+                profileCompleted: false,
               })
               .returning();
 

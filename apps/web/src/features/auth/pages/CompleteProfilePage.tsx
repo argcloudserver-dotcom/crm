@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@workspace/api-client";
 import { useAuth } from "@/shared/contexts/AuthContext";
+import { useAuthFetch } from "@/shared/hooks/useAuthFetch";
 import {
   Select,
   SelectContent,
@@ -10,11 +11,10 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select";
 
-type Role = "ceo" | "admin" | "team_leader" | "sales";
+type Role = "director" | "team_leader" | "sales";
 
 const ROLE_LABELS: Record<Role, string> = {
-  admin: "Admin",
-  ceo: "CEO",
+  director: "Director",
   team_leader: "Team Leader",
   sales: "Sales Agent",
 };
@@ -31,7 +31,8 @@ interface TeamLeader {
  * they can reach the main app.
  */
 export function CompleteProfilePage() {
-  const { currentUser, refetch } = useAuth();
+  const { currentUser, isLoading, refetch } = useAuth();
+  const authFetch = useAuthFetch();
   const [, setLocation] = useLocation();
 
   const [role, setRole] = useState<Role | "">("");
@@ -43,10 +44,11 @@ export function CompleteProfilePage() {
 
   useEffect(() => {
     if (role !== "sales") return;
-    apiFetch<{ data: TeamLeader[] }>("/api/auth/team-leaders", { method: "GET" })
-      .then((res) => {
-        // apiFetch returns parsed JSON; the API wraps payloads in { data }.
-        const list = (res as { data?: TeamLeader[] })?.data ?? [];
+    apiFetch("/api/auth/team-leaders", { method: "GET" })
+      .then(async (res) => {
+        if (!res.ok) return [];
+        const payload = (await res.json()) as { data?: TeamLeader[] };
+        const list = payload.data ?? [];
         setTeamLeaders(Array.isArray(list) ? list : []);
       })
       .catch(() => setTeamLeaders([]));
@@ -54,6 +56,7 @@ export function CompleteProfilePage() {
 
   // If the user is not signed in or already completed their profile, bounce.
   useEffect(() => {
+    if (isLoading) return;
     if (!currentUser) {
       setLocation("/login");
       return;
@@ -66,7 +69,7 @@ export function CompleteProfilePage() {
         setLocation("/home");
       }
     }
-  }, [currentUser, setLocation]);
+  }, [currentUser, isLoading, setLocation]);
 
   const canSubmit = useMemo(() => {
     if (!role) return false;
@@ -84,10 +87,9 @@ export function CompleteProfilePage() {
         teamLeaderId: role === "sales" && teamLeaderId ? teamLeaderId : null,
         phone: phone || null,
       };
-      const res = await fetch("/api/auth/complete-profile", {
+      const res = await authFetch("/api/auth/complete-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -105,6 +107,8 @@ export function CompleteProfilePage() {
       setSubmitting(false);
     }
   }
+
+  if (isLoading) return null;
 
   return (
     <div
@@ -186,7 +190,7 @@ export function CompleteProfilePage() {
           </Select>
         </div>
 
-        {role === "sales" && teamLeaders.length > 0 && (
+        {role === "sales" && (
           <div style={{ marginBottom: "20px" }}>
             <label
               style={{
@@ -196,11 +200,12 @@ export function CompleteProfilePage() {
                 marginBottom: "8px",
               }}
             >
-              Team Leader (optional)
+              Team Leader{" "}
+              <span style={{ color: "#64748b" }}>(optional)</span>
             </label>
             <Select
-              value={teamLeaderId}
-              onValueChange={(v) => setTeamLeaderId(v)}
+              value={teamLeaderId || "__none__"}
+              onValueChange={(v) => setTeamLeaderId(v === "__none__" ? "" : v)}
             >
               <SelectTrigger
                 style={{
@@ -212,6 +217,7 @@ export function CompleteProfilePage() {
                 <SelectValue placeholder="Select a team leader" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
                 {teamLeaders.map((tl) => (
                   <SelectItem key={tl.id} value={tl.id}>
                     {tl.name}
@@ -219,6 +225,18 @@ export function CompleteProfilePage() {
                 ))}
               </SelectContent>
             </Select>
+            {teamLeaders.length === 0 && (
+              <p
+                style={{
+                  marginTop: "8px",
+                  fontSize: "12px",
+                  color: "#94a3b8",
+                }}
+              >
+                Couldn't load team leaders — you can pick "None" and an
+                admin will assign one later.
+              </p>
+            )}
           </div>
         )}
 

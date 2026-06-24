@@ -60,6 +60,10 @@ export const usersTable = pgTable(
     // OAuth
     oauthProvider: varchar("oauth_provider", { length: 20 }),
     oauthId: varchar("oauth_id", { length: 255 }),
+    // Profile completion flag — false for fresh OAuth signups until they
+    // fill in role/team leader on /complete-profile. Email/password users
+    // start `true` because they fill the form during /register.
+    profileCompleted: boolean("profile_completed").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

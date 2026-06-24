@@ -1,4 +1,6 @@
+import type { Request } from "express";
 import { camelToSnake } from "../../shared/utils/camelToSnake";
+import { getVisibleUserIds } from "../../shared/utils/scope";
 import * as repo from "./clients.repository";
 import type {
   CreateClientInput,
@@ -25,11 +27,14 @@ const DEAL_FIELDS = [
   "installmentAmount",
 ] as const;
 
-// تم تغيير الاسم إلى list
+// Role-aware list. Pass req so we can scope by viewer role.
 export async function list(
+  req: Request,
   query: ListClientsQuery,
 ): Promise<ClientWithRelations[]> {
-  const rows = await repo.findAllWithRelations();
+  const viewer = req.currentUser!;
+  const visibleIds = await getVisibleUserIds(viewer);
+  const rows = await repo.findAllWithRelations(visibleIds);
   let enriched: ClientWithRelations[] = rows.map((r) => ({
     ...r.client,
     projectName: r.projectName ?? null,

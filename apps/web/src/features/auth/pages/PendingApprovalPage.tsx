@@ -1,8 +1,9 @@
 import { useI18n } from "@/shared/contexts/i18nContext";
 import { useLocation } from "wouter";
 import { Clock, LogOut } from "lucide-react";
-import { apiFetch } from "@workspace/api-client";
+import { apiFetch, useGetMe } from "@workspace/api-client";
 import { useAuth } from "@/shared/contexts/AuthContext";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { AuthShell } from "@/shared/components/layout/AuthShell";
 import { useAuthPalette } from "@/shared/hooks/useAuthPalette";
@@ -14,6 +15,24 @@ export function PendingApprovalPage() {
   const { t } = useI18n();
   const [, setLocation] = useLocation();
   const { refetch } = useAuth();
+
+  // Poll /auth/me every 5s. As soon as the admin approves (status === "active")
+  // the AuthContext effect redirects away from /pending-approval automatically.
+  const { data: me } = useGetMe({
+    query: { queryKey: ["/api/auth/me", "pending-poll"], refetchInterval: 5000, retry: false },
+  });
+
+  useEffect(() => {
+    if (me && me.status === "active") {
+      // Refresh the AuthContext session BEFORE navigating so the global
+      // redirect effect sees status="active" and doesn't bounce us back
+      // to /pending-approval.
+      (async () => {
+        await refetch();
+        setLocation("/");
+      })();
+    }
+  }, [me, refetch, setLocation]);
 
   async function handleLogout() {
     await apiFetch("/api/auth/logout", { method: "POST" });

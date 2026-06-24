@@ -13,6 +13,7 @@ import { logger } from "../../lib/logger";
 import { getAppUrl } from "../../shared/utils/getAppUrl";
 import * as repo from "./auth.repository";
 import type {
+  CompleteProfileInput,
   ForgotPasswordInput,
   LoginInput,
   RegisterInput,
@@ -115,7 +116,11 @@ export async function register(input: RegisterInput): Promise<RegisterResult> {
     // access the CRM immediately after verifying email.
     status: "pending",
     role: userRole,
-    teamLeaderId: null,
+    // Sales users may pick a team leader at registration time. We persist
+    // that choice so the admin sees it pre-filled on the approval card and
+    // the link is established the moment the account is approved.
+    teamLeaderId:
+      userRole === "sales" && input.teamLeaderId ? input.teamLeaderId : null,
     verifyToken: verifyCode,
     verifyTokenExpires,
   });
@@ -321,5 +326,47 @@ export async function findOrCreateMockOAuthUser(input: {
     // SECURITY FIX: OAuth signups must also wait for admin approval.
     status: "pending",
     role: "sales",
+    // OAuth signups skip the registration form, so they must complete
+    // their profile (pick a role, optionally a team leader) before the
+    // CRM lets them in. Email/password signups stay `true` (DB default).
+    profileCompleted: false,
   });
+}
+
+/**
+ * Completes the OAuth profile: stores the role, optional team leader, and
+ * phone, then marks `profileCompleted = true`. The account stays `pending`
+ * so an admin still has to approve it (and can change the role first).
+ */
+export type CompleteProfileResult =
+  | { ok: true; user: Record<string, unknown> }
+  | { ok: false; status: number; reason: string };
+
+export async function completeProfile(
+  userId: string,
+  input: CompleteProfileInput,
+): Promise<CompleteProfileResult> {
+  const current = await repo.findById(userId);
+  if (!current) {
+    return { ok: false, status: 404, reason: "User not found" };
+  }
+  // Team leader is optional for sales agents; an admin can assign one later.
+
+  const updated = await repo.updateUser(userId, {
+    role: input.role,
+    teamLeaderId: input.role === "sales" ? input.teamLeaderId ?? null : null,
+    phone: input.phone ?? current.phone ?? null,
+    profileCompleted: true,
+    // Status stays whatever it was — typically `pending` until admin approval.
+  });
+  if (!updated) {
+    return { ok: false, status: 404, reason: "User not found" };
+  }
+
+  // Re-notify admins now that the role is final.
+  void notifyAdminsOfNewUser(updated).catch((err) =>
+    logger.error({ err }, "Failed to notify admins after profile completion"),
+  );
+
+  return { ok: true, user: sanitizeUser(updated) };
 }

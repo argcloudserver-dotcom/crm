@@ -22,11 +22,23 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     queryKey: ["permissions", "me"],
     queryFn: async () => {
       const res = await apiFetch("/api/permissions/me");
+      if (res.status === 401 || res.status === 403) {
+        return { permissions: {}, role: null };
+      }
       if (!res.ok) throw new Error("Failed to fetch permissions");
-      return res.json() as Promise<{ permissions: Record<string, boolean> }>;
+      const payload = (await res.json()) as {
+        data?: { permissions?: Record<string, boolean>; role?: string | null };
+        permissions?: Record<string, boolean>;
+        role?: string | null;
+      };
+      return {
+        permissions: payload.data?.permissions ?? payload.permissions ?? {},
+        role: payload.data?.role ?? payload.role ?? null,
+      };
     },
-    enabled: !!currentUser,
+    enabled: !!currentUser && currentUser.status === "active" && currentUser.profileCompleted !== false,
     staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
   const permissions = data?.permissions ?? {};

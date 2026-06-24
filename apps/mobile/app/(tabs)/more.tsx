@@ -114,7 +114,7 @@ export default function MoreScreen() {
         {/* Tools */}
         <Text style={s.sectionLabel}>TOOLS</Text>
         <View style={s.menuCard}>
-          <SectionItem icon="calendar" label="Daily Planner" subtitle="Tasks & schedule" onPress={() => router.push("/(tabs)/planner")} />
+          <SectionItem icon="calendar" label="My Task" subtitle="Tasks & schedule" onPress={() => router.push("/(tabs)/planner")} />
           <Divider />
           <SectionItem icon="home" label="Resale Market" subtitle="Available units" onPress={() => router.push("/(tabs)/resale")} />
           <Divider />
@@ -122,7 +122,7 @@ export default function MoreScreen() {
           <Divider />
           <SectionItem icon="user" label="My Profile" subtitle="Account & settings" onPress={() => router.push("/(tabs)/profile")} />
           <Divider />
-          <SectionItem icon="users" label="Team" subtitle="Employees & agents" onPress={() => router.push("/(tabs)/employees")} />
+          <SectionItem icon="users" label="Employees" subtitle="Employees & agents" onPress={() => router.push("/(tabs)/employees")} />
           <Divider />
           <SectionItem icon="bell" label="Notifications" subtitle="Alerts & updates" onPress={() => router.push("/(tabs)/notifications")} badge={unreadCount} />
         </View>

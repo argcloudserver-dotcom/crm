@@ -25,6 +25,12 @@ export const rejectUserBody = z.object({
   reason: z.string().optional(),
 });
 
+export const changeRoleBeforeApprovalBody = z.object({
+  newRole: z.enum(["admin", "ceo", "director", "team_leader", "sales"]),
+  teamLeaderId: z.string().uuid().nullable().optional(),
+});
+
 export type ListUsersQuery = z.infer<typeof listUsersQuery>;
 export type UpdateUserInput = z.infer<typeof updateUserBody>;
 export type RejectUserInput = z.infer<typeof rejectUserBody>;
+export type ChangeRoleBeforeApprovalInput = z.infer<typeof changeRoleBeforeApprovalBody>;

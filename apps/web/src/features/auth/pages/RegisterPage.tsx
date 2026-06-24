@@ -525,19 +525,30 @@ export function RegisterPage() {
           </Select>
         </div>
 
-        {watchRole === "sales" && teamLeaders.length > 0 && (
+        {watchRole === "sales" && (
           <div style={{ marginBottom: "24px" }}>
             <label style={fieldLabel(false)}>Team Leader (optional)</label>
-            <Select value={form.watch("teamLeaderId") ?? ""} onValueChange={(val) => form.setValue("teamLeaderId", val || undefined, { shouldValidate: true })}>
+            <Select
+              value={form.watch("teamLeaderId") ? form.watch("teamLeaderId")! : "__none__"}
+              onValueChange={(val) =>
+                form.setValue("teamLeaderId", val === "__none__" ? undefined : val, { shouldValidate: true })
+              }
+            >
               <SelectTrigger style={{ background: "transparent", border: "none", borderBottom: `1px solid ${p.selectBorder}`, borderRadius: 0, padding: "10px 0", color: p.selectText, fontSize: "15px", outline: "none", boxShadow: "none", transition: "color 0.3s, border-color 0.3s" }}>
                 <SelectValue placeholder="Select your team leader" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">None — assign later</SelectItem>
                 {teamLeaders.map((tl) => (
                   <SelectItem key={tl.id} value={tl.id}>{tl.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {teamLeaders.length === 0 && (
+              <p style={{ fontSize: "11px", color: p.muted, marginTop: "6px" }}>
+                No team leaders available yet — an admin can assign one when approving your account.
+              </p>
+            )}
           </div>
         )}
 

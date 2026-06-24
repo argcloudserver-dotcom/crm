@@ -89,7 +89,12 @@ app.get("/api/csrf-token", (req, res) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.set("Pragma", "no-cache");
   res.set("Expires", "0");
-  const token = generateToken(req, res);
+  // Always issue a fresh token here. `csrf-csrf` validates an existing CSRF
+  // cookie by default; after an OAuth redirect, server restart, secret change,
+  // or stale browser cookie that validation can throw EBADCSRFTOKEN and make
+  // the token-issuing endpoint itself return 403. This route's only job is to
+  // replace that cookie/token pair with a valid one.
+  const token = generateToken(req, res, true, false);
   res.json({ csrfToken: token });
 });
 
@@ -100,9 +105,19 @@ app.get("/api/csrf-token", (req, res) => {
  * Checking both conditions prevents a browser from spoofing a mobile client
  * by simply adding an Authorization header.
  */
+// Routes that must NEVER be touched by the CSRF middleware. The token-issuing
+// endpoint cannot itself require a valid token, and the OAuth callbacks are
+// top-level browser redirects from a third party — they will never carry our
+// x-csrf-token header.
+const CSRF_EXEMPT_PATHS = new Set<string>([
+  "/api/heartbeat",
+  "/api/csrf-token",
+  "/api/auth/google/callback",
+  "/api/auth/facebook/callback",
+]);
+
 app.use((req, res, next) => {
-  // Heartbeat is a low-risk endpoint; exempt from CSRF
-  if (req.path === "/api/heartbeat") return next();
+  if (CSRF_EXEMPT_PATHS.has(req.path)) return next();
 
   const hasCookie = !!(
     req.cookies?.["session"] || req.cookies?.["__Host-session"]

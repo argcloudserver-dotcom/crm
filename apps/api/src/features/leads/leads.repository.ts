@@ -10,7 +10,7 @@ import {
   type User,
   type Project,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 const leadSelect = {
   lead: leadsTable,
@@ -18,12 +18,21 @@ const leadSelect = {
   primarySalesName: usersTable.name,
 };
 
-export async function findAllWithRelations() {
-  return db
+/**
+ * @param visibleUserIds - null = no restriction (admin/ceo/director).
+ *   Otherwise: only leads whose primarySalesId is in the list. Unassigned
+ *   leads (primarySalesId IS NULL) are visible only when the caller is
+ *   unrestricted, so sales/team-leader scopes hide orphan leads.
+ */
+export async function findAllWithRelations(visibleUserIds: string[] | null = null) {
+  const base = db
     .select(leadSelect)
     .from(leadsTable)
     .leftJoin(projectsTable, eq(leadsTable.projectId, projectsTable.id))
     .leftJoin(usersTable, eq(leadsTable.primarySalesId, usersTable.id));
+  if (visibleUserIds === null) return base;
+  if (visibleUserIds.length === 0) return [] as Awaited<ReturnType<typeof base>>;
+  return base.where(inArray(leadsTable.primarySalesId, visibleUserIds));
 }
 
 export async function findByIdWithRelations(leadId: string) {

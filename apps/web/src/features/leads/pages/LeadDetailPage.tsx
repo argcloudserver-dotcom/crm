@@ -6,6 +6,7 @@ import {
   useListLeadActivities, useListLeads, useListProjects, useListUsers,
 } from "@workspace/api-client";
 import { useI18n } from "@/shared/contexts/i18nContext";
+import { useAuth } from "@/shared/contexts/AuthContext";
 import { Button } from "@/shared/components/ui/button";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { cn } from "@/shared/utils/utils";
@@ -23,6 +24,8 @@ import { toast } from "sonner";
 
 export function LeadDetailPage() {
   const { t, locale } = useI18n();
+  const { currentUser } = useAuth();
+  const canManage = !!currentUser && ["ceo", "admin", "director", "team_leader"].includes(currentUser.role);
   const isAr = locale === "ar";
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -141,6 +144,7 @@ export function LeadDetailPage() {
           t={t}
           onEdit={() => setIsEditOpen(true)}
           onAssign={m.assign}
+          canManage={canManage}
         />
       </div>
 

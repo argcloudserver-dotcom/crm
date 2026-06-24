@@ -111,6 +111,10 @@ export interface User {
   /** @nullable */
   lastActiveAt?: string | null;
   createdAt: string;
+  /** OAuth provider if this account was created via Google/Facebook. */
+  oauthProvider?: 'google' | 'facebook' | null;
+  /** False for fresh OAuth signups until /complete-profile is submitted. */
+  profileCompleted?: boolean;
 }
 
 export interface AuthResponse {

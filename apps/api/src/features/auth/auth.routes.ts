@@ -16,6 +16,7 @@ import { sanitizeUser } from "../../lib/sanitize";
 import { authLog } from "../../lib/auth/auth-log";
 import { env } from "../../lib/env";
 import {
+  completeProfileBody,
   forgotPasswordBody,
   loginBody,
   registerBody,
@@ -155,6 +156,28 @@ router.post("/auth/resend-verification", resendVerificationLimiter, validateBody
   return ok(res, { success: true, message: "Verification email has been sent" });
 }));
 
+// Complete-profile endpoint — OAuth users hit this once after their first
+// sign-in. Uses a session-based check (NOT `requireAuth`) because the user
+// is still `pending`, which requireAuth rejects with 403.
+router.post(
+  "/auth/complete-profile",
+  validateBody(completeProfileBody),
+  asyncHandler(async (req, res) => {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      return fail(res, 401, { code: "UNAUTHORIZED", message: "Sign in first." });
+    }
+    if (user.status === "rejected" || user.status === "suspended") {
+      return fail(res, 403, { code: "ACCOUNT_BLOCKED", message: "Account not allowed." });
+    }
+    const result = await service.completeProfile(user.id, req.body);
+    if (!result.ok) {
+      return fail(res, result.status, { code: "COMPLETE_PROFILE_FAILED", message: result.reason });
+    }
+    return ok(res, { success: true, user: result.user });
+  }),
+);
+
 // ── OAuth Handlers ──────────────────────────────────────────────────────────
 
 async function completeOAuthLogin(req: any, res: any, user: User): Promise<void> {
@@ -168,6 +191,15 @@ async function completeOAuthLogin(req: any, res: any, user: User): Promise<void>
   if (user.status === "suspended") {
     return res.redirect(`${baseUrl}/login?error=account_suspended`);
   }
+  // NEW: profile-completion gate. If this is a fresh OAuth signup whose
+  // role/team-leader hasn't been filled in yet, issue a session anyway and
+  // send them to /complete-profile. The frontend ProtectedPages guard
+  // keeps them locked to that page until they submit.
+  if ((user as any).profileCompleted === false) {
+    const token = await service.startSessionForOAuthUser(user);
+    setSessionCookie(res, token);
+    return res.redirect(`${baseUrl}/complete-profile`);
+  }
   if (user.status !== "active") {
     return res.redirect(`${baseUrl}/pending-approval?email=${encodeURIComponent(user.email)}`);
   }
@@ -175,6 +207,7 @@ async function completeOAuthLogin(req: any, res: any, user: User): Promise<void>
   setSessionCookie(res, token);
   res.redirect(`${baseUrl}/home`);
 }
+
 
 async function mockOAuthSignIn(req: any, res: any, provider: "google" | "facebook"): Promise<void> {
   if (env.AUTH_MODE !== "mock") return fail(res, 403, { code: "MOCK_AUTH_DISABLED", message: `Mock ${provider} disabled.` });

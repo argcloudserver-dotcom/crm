@@ -1,3 +1,5 @@
+import type { Request } from "express";
+import { getVisibleUserIds } from "../../shared/utils/scope";
 import * as repo from "./dashboard.repository";
 import type {
   DashboardStats,
@@ -26,8 +28,11 @@ const PIPELINE_ORDER = [
   "lost",
 ] as const;
 
-export async function getStats(): Promise<DashboardStats> {
-  const [leads, users, projects, resaleUnits, clients] = await repo.loadStatsRaw();
+export async function getStats(req: Request): Promise<DashboardStats> {
+  const viewer = req.currentUser!;
+  const visibleIds = await getVisibleUserIds(viewer);
+  const [leads, users, projects, resaleUnits, clients] =
+    await repo.loadStatsRaw(visibleIds);
   return {
     totalLeads: leads.length,
     activeLeads: leads.filter((l) => !["won", "lost"].includes(l.status)).length,
@@ -41,8 +46,10 @@ export async function getStats(): Promise<DashboardStats> {
   };
 }
 
-export async function getPipeline(): Promise<PipelineEntry[]> {
-  const leads = await repo.leadStatuses();
+export async function getPipeline(req: Request): Promise<PipelineEntry[]> {
+  const viewer = req.currentUser!;
+  const visibleIds = await getVisibleUserIds(viewer);
+  const leads = await repo.leadStatuses(visibleIds);
   const counts: Record<string, number> = {};
   for (const l of leads) counts[l.status] = (counts[l.status] ?? 0) + 1;
   return PIPELINE_ORDER.map((status) => ({
@@ -52,9 +59,11 @@ export async function getPipeline(): Promise<PipelineEntry[]> {
   }));
 }
 
-export async function getTopPerformers(): Promise<TopPerformer[]> {
+export async function getTopPerformers(req: Request): Promise<TopPerformer[]> {
+  const viewer = req.currentUser!;
+  const visibleIds = await getVisibleUserIds(viewer);
   const [leads, users] = await Promise.all([
-    repo.leadsBySales(),
+    repo.leadsBySales(visibleIds),
     repo.activeUsers(),
   ]);
 
@@ -84,8 +93,12 @@ export async function getTopPerformers(): Promise<TopPerformer[]> {
     .slice(0, 10);
 }
 
-export async function getRecentActivity(): Promise<RecentActivityEntry[]> {
-  const rows = await repo.recentActivities();
+export async function getRecentActivity(
+  req: Request,
+): Promise<RecentActivityEntry[]> {
+  const viewer = req.currentUser!;
+  const visibleIds = await getVisibleUserIds(viewer);
+  const rows = await repo.recentActivities(visibleIds);
   return rows
     .sort(
       (a, b) =>

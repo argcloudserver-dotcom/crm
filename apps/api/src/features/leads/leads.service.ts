@@ -4,8 +4,8 @@ import {
   sendLeadStatusChangedEmail,
 } from "../../lib/email/lead-emails";
 import { logger } from "../../lib/logger";
-import { camelToSnake } from "../../shared/utils/camelToSnake";
 import { getAppUrl } from "../../shared/utils/getAppUrl";
+import { getVisibleUserIds } from "../../shared/utils/scope";
 import * as repo from "./leads.repository";
 import type {
   AssignLeadInput,
@@ -34,8 +34,13 @@ function enrich(row: {
   };
 }
 
-export async function listLeads(query: ListLeadsQuery): Promise<LeadWithRelations[]> {
-  const rows = await repo.findAllWithRelations();
+export async function listLeads(
+  req: Request,
+  query: ListLeadsQuery,
+): Promise<LeadWithRelations[]> {
+  const viewer = req.currentUser!;
+  const visibleIds = await getVisibleUserIds(viewer);
+  const rows = await repo.findAllWithRelations(visibleIds);
   let leads = rows.map(enrich);
   if (query.status) leads = leads.filter((l) => l.status === query.status);
   if (query.projectId)
@@ -50,10 +55,12 @@ export async function listLeads(query: ListLeadsQuery): Promise<LeadWithRelation
   return leads;
 }
 
-export async function getKanban(): Promise<{
+export async function getKanban(req: Request): Promise<{
   columns: { status: LeadStatus; leads: LeadWithRelations[] }[];
 }> {
-  const rows = await repo.findAllWithRelations();
+  const viewer = req.currentUser!;
+  const visibleIds = await getVisibleUserIds(viewer);
+  const rows = await repo.findAllWithRelations(visibleIds);
   const enriched = rows.map(enrich);
   const columns = LEAD_STATUSES.map((status) => ({
     status,
@@ -62,9 +69,18 @@ export async function getKanban(): Promise<{
   return { columns };
 }
 
-export async function getLead(leadId: string): Promise<LeadWithRelations | null> {
+export async function getLead(
+  req: Request,
+  leadId: string,
+): Promise<LeadWithRelations | null> {
   const row = await repo.findByIdWithRelations(leadId);
-  return row ? enrich(row) : null;
+  if (!row) return null;
+  const visibleIds = await getVisibleUserIds(req.currentUser!);
+  if (visibleIds !== null) {
+    const owner = row.lead.primarySalesId;
+    if (!owner || !visibleIds.includes(owner)) return null;
+  }
+  return enrich(row);
 }
 
 export async function createLead(
@@ -127,8 +143,7 @@ export async function updateLead(
   for (const f of UPDATABLE_FIELDS) {
     if (f in input) {
       const value = (input as Record<string, unknown>)[f];
-      if (f === "name") updateData.name = value;
-      else updateData[camelToSnake(f)] = value === null ? null : value;
+      updateData[f] = value === null ? null : value;
     }
   }
 
@@ -171,7 +186,7 @@ export async function assignLead(
   input: AssignLeadInput,
 ): Promise<LeadWithRelations | null> {
   const oldLead = await repo.findById(leadId);
-  const updated = await repo.updateById(leadId, { primary_sales_id: input.salesId });
+  const updated = await repo.updateById(leadId, { primarySalesId: input.salesId });
   if (!updated) return null;
 
   let salesUserName: string | null = null;
@@ -201,7 +216,7 @@ export async function updateLeadStatus(
   const oldLead = await repo.findById(leadId);
   const updated = await repo.updateById(leadId, {
     status: input.status,
-    last_action_at: new Date(),
+    lastActionAt: new Date(),
   });
   if (!updated) return null;
 
@@ -241,7 +256,7 @@ export async function createActivity(
     nextActionAt: input.nextActionAt ? new Date(input.nextActionAt) : null,
     duration: input.duration != null ? String(input.duration) : null,
   });
-  await repo.updateById(leadId, { last_action_at: new Date() });
+  await repo.updateById(leadId, { lastActionAt: new Date() });
   return { ...activity, userName: currentUser.name };
 }
 

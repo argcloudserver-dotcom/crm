@@ -20,6 +20,7 @@ import { ResetPasswordPage } from "@/features/auth/pages/ResetPasswordPage";
 import { VerifyEmailPage } from "@/features/auth/pages/VerifyEmailPage";
 import { PendingApprovalPage } from "@/features/auth/pages/PendingApprovalPage";
 import { OAuthCallbackPage } from "@/features/auth/pages/OAuthCallbackPage";
+import { CompleteProfilePage } from "@/features/auth/pages/CompleteProfilePage";
 
 // Dashboard pages
 import { HomePage } from "@/features/home/pages/HomePage";
@@ -63,6 +64,9 @@ const AUTH_PATHS = [
   "/reset-password",
   "/verify-email",
   "/pending-approval",
+  // OAuth complete-profile gate — must live OUTSIDE ProtectedPages so the
+  // OAuth user can land here even though they're not "active" yet.
+  "/complete-profile",
   // Public OAuth landing routes — must NEVER be gated by ProtectedPages,
   // otherwise the user is redirected to /login before the code can be
   // exchanged, producing an infinite login loop.
@@ -76,6 +80,11 @@ function ProtectedPages() {
 
   if (isLoading) return null;
   if (!currentUser) return <Redirect to="/login" />;
+  // OAuth users whose profile isn't complete go to /complete-profile FIRST,
+  // even before the pending-approval gate, because their role isn't set yet.
+  if (currentUser.profileCompleted === false) {
+    return <Redirect to="/complete-profile" />;
+  }
   // SECURITY FIX: pending / rejected accounts must NOT reach the CRM.
   if (currentUser.status === "pending" || currentUser.status === "rejected") {
     return <Redirect to="/pending-approval" />;
@@ -131,6 +140,7 @@ function Router() {
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/verify-email" component={VerifyEmailPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />
+        <Route path="/complete-profile" component={CompleteProfilePage} />
         <Route path="/auth/google/callback" component={OAuthCallbackPage} />
         <Route path="/auth/facebook/callback" component={OAuthCallbackPage} />
       </Switch>

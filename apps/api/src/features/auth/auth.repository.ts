@@ -7,11 +7,17 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 export async function findActiveTeamLeaders() {
+  // Include team_leader + director, in active OR pending status, so admins
+  // always have someone to assign when approving a sales signup — even when
+  // no team_leader has been approved yet.
   return db
     .select({ id: usersTable.id, name: usersTable.name })
     .from(usersTable)
     .where(
-      and(eq(usersTable.role, "team_leader"), eq(usersTable.status, "active")),
+      and(
+        inArray(usersTable.role, ["team_leader", "director"]),
+        inArray(usersTable.status, ["active", "pending"]),
+      ),
     );
 }
 
@@ -20,6 +26,15 @@ export async function findByEmail(email: string): Promise<User | null> {
     .select()
     .from(usersTable)
     .where(eq(usersTable.email, email.toLowerCase()))
+    .limit(1);
+  return user ?? null;
+}
+
+export async function findById(userId: string): Promise<User | null> {
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
     .limit(1);
   return user ?? null;
 }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { withPermission } from "@workspace/permissions";
 import { requireAuth } from "../../shared/middlewares/requireAuth";
+import { getUserFromRequest } from "../../lib/auth/session";
 import { asyncHandler } from "../../shared/utils/asyncHandler";
 import { fail, ok } from "../../shared/utils/response";
 import { validateBody, validateParams } from "../../shared/utils/validate";
@@ -85,13 +86,19 @@ router.post(
 
 router.get(
   "/permissions/me",
-  requireAuth,
-  asyncHandler(async (req, res) =>
-    ok(
-      res,
-      await service.getMyPermissions(req.currentUser!.id, req.currentUser!.role),
-    ),
-  ),
+  asyncHandler(async (req, res) => {
+    const user = await getUserFromRequest(req);
+
+    if (!user) {
+      return ok(res, { permissions: {}, role: null });
+    }
+
+    if (user.status === "rejected" || user.status === "suspended") {
+      return ok(res, { permissions: {}, role: user.role });
+    }
+
+    return ok(res, await service.getMyPermissions(user.id, user.role));
+  }),
 );
 
 export default router;

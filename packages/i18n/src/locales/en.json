@@ -4,24 +4,24 @@
     "pipeline": "Sales Pipeline",
     "inventory": "Units",
     "clients": "Deals",
-    "people": "Team",
+    "people": "Employees",
     "tools": "Tools"
   },
   "nav": {
     "dashboard": "Dashboard",
     "leads": {
       "_": "Leads",
-      "list": "Leads Pipeline",
-      "kanban": "Kanban Board"
+      "list": "My Leads",
+      "kanban": "Leads Board"
     },
     "projects": "Projects",
     "resale": "Resale Market",
     "clients": "Completed Deals",
     "employees": {
-      "_": "Team",
+      "_": "Employees",
       "pending": "Join Requests"
     },
-    "planner": "Task Planner",
+    "planner": "My Task",
     "reports": "Performance Reports",
     "profile": "My Profile",
     "permissions": "Permissions",
@@ -373,7 +373,7 @@
     "whatsapp": "WhatsApp Number"
   },
   "planner": {
-    "title": "Daily Planner",
+    "title": "My Task",
     "subtitle": "Plan and organize your daily tasks.",
     "add_task": "Add Task",
     "no_tasks": "No tasks for today.",
@@ -402,7 +402,7 @@
       "my_leads_desc": "Manage & track your leads",
       "resale": "Resale Units",
       "resale_desc": "Secondary market",
-      "planner": "Daily Planner",
+      "planner": "My Task",
       "planner_desc": "Today's tasks & schedule",
       "profile": "My Profile",
       "profile_desc": "Account & settings"

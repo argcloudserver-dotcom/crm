@@ -5,10 +5,12 @@ import {
   usersTable,
   type Client,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
-export async function findAllWithRelations() {
-  return db
+export async function findAllWithRelations(
+  visibleUserIds: string[] | null = null,
+) {
+  const base = db
     .select({
       client: clientsTable,
       projectName: projectsTable.name,
@@ -17,6 +19,9 @@ export async function findAllWithRelations() {
     .from(clientsTable)
     .leftJoin(projectsTable, eq(clientsTable.projectId, projectsTable.id))
     .leftJoin(usersTable, eq(clientsTable.assignedSalesId, usersTable.id));
+  if (visibleUserIds === null) return base;
+  if (visibleUserIds.length === 0) return [] as Awaited<ReturnType<typeof base>>;
+  return base.where(inArray(clientsTable.assignedSalesId, visibleUserIds));
 }
 
 export async function findByIdWithRelations(clientId: string) {

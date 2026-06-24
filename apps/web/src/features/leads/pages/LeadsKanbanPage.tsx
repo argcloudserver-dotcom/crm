@@ -29,11 +29,36 @@ const ease = [0.22, 1, 0.36, 1] as const;
 
 export function LeadsKanbanPage() {
   const { t, locale } = useI18n();
-  const { data: kanbanData, isLoading } = useGetLeadsKanban();
+  const { data: kanbanData, isLoading } = useGetLeadsKanban({
+    query: { refetchInterval: 5000, refetchOnWindowFocus: true },
+  });
   const [, setLocation] = useLocation();
   const updateStatus = useUpdateLeadStatus();
   const queryClient = useQueryClient();
   const isAr = locale === "ar";
+
+  const moveLeadInCache = (leadId: string, newStatus: string) => {
+    const key = getGetLeadsKanbanQueryKey();
+    queryClient.setQueriesData<any>({ queryKey: key }, (old: any) => {
+      if (!old?.columns) return old;
+      let moving: any = null;
+      const stripped = old.columns.map((c: any) => {
+        const leads = c.leads.filter((l: any) => {
+          if (l.id === leadId) { moving = l; return false; }
+          return true;
+        });
+        return { ...c, leads };
+      });
+      if (!moving) return old;
+      const updated = { ...moving, status: newStatus };
+      return {
+        ...old,
+        columns: stripped.map((c: any) =>
+          c.status === newStatus ? { ...c, leads: [updated, ...c.leads] } : c
+        ),
+      };
+    });
+  };
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     e.dataTransfer.setData("leadId", leadId);
@@ -46,18 +71,22 @@ export function LeadsKanbanPage() {
   const handleDrop = (e: React.DragEvent, status: string) => {
     e.preventDefault();
     const leadId = e.dataTransfer.getData("leadId");
-    if (leadId) {
-      updateStatus.mutate(
-        { leadId, data: { status: status as any } },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getGetLeadsKanbanQueryKey() });
-            toast.success(t("leads.change_status"));
-          },
-          onError: (err) => toast.error(err.message || "Failed to update lead status"),
-        }
-      );
-    }
+    if (!leadId) return;
+    const prev = queryClient.getQueryData<any>(getGetLeadsKanbanQueryKey());
+    moveLeadInCache(leadId, status);
+    updateStatus.mutate(
+      { leadId, data: { status: status as any } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetLeadsKanbanQueryKey() });
+          toast.success(t("leads.change_status"));
+        },
+        onError: (err) => {
+          if (prev) queryClient.setQueryData(getGetLeadsKanbanQueryKey(), prev);
+          toast.error(err.message || "Failed to update lead status");
+        },
+      }
+    );
   };
 
   if (isLoading) {

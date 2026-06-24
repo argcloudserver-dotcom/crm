@@ -214,6 +214,7 @@ export function LeadsListPage() {
                 {isAr ? "استيراد جماعي" : "Bulk Import"}
               </button>
             )}
+			{isAdmin && (
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
               <DialogTrigger asChild>
                 <button style={{
@@ -356,6 +357,7 @@ export function LeadsListPage() {
                 </Form>
               </DialogContent>
             </Dialog>
+		    )}
           </div>
         </div>
 
@@ -583,27 +585,29 @@ export function LeadsListPage() {
                         fontSize: 11, fontWeight: 600,
                         color: isHovered ? accent.bar : "var(--muted-foreground)",
                         transition: "color 0.15s",
-                        borderRight: "1px solid var(--border)",
+                        borderRight: isAdmin ? "1px solid var(--border)" : "none",
                       }}
                     >
                       <Eye style={{ width: 12, height: 12 }} />
                       {isAr ? "عرض" : "View"}
                     </button>
-                    <button
-                      onClick={() => setAssigningLead(lead)}
-                      style={{
-                        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                        padding: "9px 0", cursor: "pointer",
-                        background: "transparent", border: "none",
-                        fontSize: 11, fontWeight: 600,
-                        color: "var(--muted-foreground)",
-                        transition: "color 0.15s",
-                        borderRight: isAdmin ? "1px solid var(--border)" : "none",
-                      }}
-                    >
-                      <Users2 style={{ width: 12, height: 12 }} />
-                      {isAr ? "تعيين" : "Assign"}
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => setAssigningLead(lead)}
+                        style={{
+                          flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                          padding: "9px 0", cursor: "pointer",
+                          background: "transparent", border: "none",
+                          fontSize: 11, fontWeight: 600,
+                          color: "var(--muted-foreground)",
+                          transition: "color 0.15s",
+                          borderRight: isAdmin ? "1px solid var(--border)" : "none",
+                        }}
+                      >
+                        <Users2 style={{ width: 12, height: 12 }} />
+                        {isAr ? "تعيين" : "Assign"}
+                      </button>
+                    )}
                     {isAdmin && (
                       <button
                         disabled={deletingId === lead.id}

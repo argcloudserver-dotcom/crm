@@ -11,6 +11,7 @@ import {
   validateQuery,
 } from "../../shared/utils/validate";
 import {
+  changeRoleBeforeApprovalBody,
   listUsersQuery,
   rejectUserBody,
   updateUserBody,
@@ -83,6 +84,9 @@ router.patch(
     if (!updated) {
       return fail(res, 404, { code: "NOT_FOUND", message: "User not found" });
     }
+    if ("error" in updated) {
+      return fail(res, 400, { code: "BAD_REQUEST", message: updated.error });
+    }
     return ok(res, updated);
   }),
 );
@@ -129,6 +133,31 @@ router.post(
       return fail(res, 404, { code: "NOT_FOUND", message: "User not found" });
     }
     return ok(res, updated);
+  }),
+);
+
+// Admin/CEO endpoint — change a pending user's requested role before
+// approving them. Mirrors PATCH /users/:id but is scoped (pending only)
+// and produces an audit log entry.
+router.patch(
+  "/users/:userId/change-role-before-approval",
+  requireAuth,
+  withPermission("users.manage"),
+  validateParams(userIdParams),
+  validateBody(changeRoleBeforeApprovalBody),
+  asyncHandler(async (req, res) => {
+    const result = await service.changeRoleBeforeApproval(
+      req.params.userId,
+      req.body,
+      req.currentUser!.id,
+    );
+    if (!result) {
+      return fail(res, 404, { code: "NOT_FOUND", message: "User not found" });
+    }
+    if ("error" in result) {
+      return fail(res, 400, { code: "BAD_REQUEST", message: result.error });
+    }
+    return ok(res, result);
   }),
 );
 

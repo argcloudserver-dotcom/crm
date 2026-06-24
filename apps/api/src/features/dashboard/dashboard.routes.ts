@@ -11,28 +11,32 @@ router.get(
   "/dashboard/stats",
   requireAuth,
   withPermission("dashboard.view"),
-  asyncHandler(async (_req, res) => ok(res, await service.getStats())),
+  asyncHandler(async (req, res) => ok(res, await service.getStats(req))),
 );
 
 router.get(
   "/dashboard/pipeline",
   requireAuth,
   withPermission("dashboard.view"),
-  asyncHandler(async (_req, res) => ok(res, await service.getPipeline())),
+  asyncHandler(async (req, res) => ok(res, await service.getPipeline(req))),
 );
 
 router.get(
   "/dashboard/top-performers",
   requireAuth,
   withPermission("dashboard.view"),
-  asyncHandler(async (_req, res) => ok(res, await service.getTopPerformers())),
+  asyncHandler(async (req, res) =>
+    ok(res, await service.getTopPerformers(req)),
+  ),
 );
 
 router.get(
   "/dashboard/recent-activity",
   requireAuth,
   withPermission("dashboard.view"),
-  asyncHandler(async (_req, res) => ok(res, await service.getRecentActivity())),
+  asyncHandler(async (req, res) =>
+    ok(res, await service.getRecentActivity(req)),
+  ),
 );
 
 export default router;

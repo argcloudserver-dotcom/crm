@@ -176,6 +176,9 @@ function truncate(text: string, maxLength = 300): string {
 }
 
 function buildErrorMessage(response: Response, data: unknown): string {
+  if (response.status === 403 || response.status === 401) {
+    return "Access denied. Please contact your admin";
+  }
   const prefix = `HTTP ${response.status} ${response.statusText}`;
 
   if (typeof data === "string") {
